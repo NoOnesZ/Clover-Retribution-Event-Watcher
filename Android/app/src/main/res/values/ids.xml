@@ -1,0 +1,5 @@
+<resources>
+    <item type="id" name="private_server_code" />
+    <item type="id" name="private_server_save" />
+    <item type="id" name="private_server_result" />
+</resources>

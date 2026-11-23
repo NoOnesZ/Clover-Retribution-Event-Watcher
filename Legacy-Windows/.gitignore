@@ -1,0 +1,16 @@
+# Local settings and screenshot fixtures
+romulti-config*.json
+romulti-config*.json.*
+tests/fixtures/
+.env
+.env.*
+!.env.example
+
+# Builds and backups
+*.exe
+*.bak
+*.log
+*.pfx
+build/
+bin/
+obj/

@@ -1,0 +1,14 @@
+/.gradle/
+/local.properties
+**/build/
+*.apk
+*.aab
+*.jks
+*.keystore
+key.properties
+detector.xml
+romulti-config.json
+romulti-config*.json.*
+.env
+.env.*
+!.env.example

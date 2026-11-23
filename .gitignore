@@ -1,0 +1,23 @@
+# Local detector settings, including Legacy-Windows
+romulti-config.json
+romulti-config*.json.*
+detector.xml
+.env
+.env.*
+!.env.example
+
+# Local build products and signing material
+*.exe
+*.apk
+*.aab
+*.bak
+*.log
+*.jks
+*.keystore
+local.properties
+key.properties
+.gradle/
+.previous-android-build/
+build/
+bin/
+obj/
