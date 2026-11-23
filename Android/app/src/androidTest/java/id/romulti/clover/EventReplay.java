@@ -19,6 +19,7 @@ final class EventReplay {
         verifyCatalogTypos();
         verifyStarBroadcasts();
         verifyLongStars();
+        verifyMutedGiantDemon();
         EventHistory history = new EventHistory();
         expect(history, 0, "", TIP);
         expect(history, 3, "warlord", TIP, WARLORD);
@@ -95,6 +96,22 @@ final class EventReplay {
         }
     }
 
+    private static void verifyMutedGiantDemon() {
+        String[] messages = {
+            "[Event] The seal has shattered walks the land, and its gaze is",
+            "[Event] The seal has shattere E1 walks the land, and its gaze is",
+            "[Event] The sea1 has shatterd and the Giant Demon walks the land.",
+            "[Event] The Devil AssauIt approaches."
+        };
+        for (String message : messages) {
+            for (boolean includeCommon : new boolean[] {false, true}) {
+                EventMatcher.Frame frame = EventMatcher.scan(Arrays.asList(message), includeCommon);
+                if (!frame.readable || !frame.events.isEmpty())
+                    throw new AssertionError("Giant Demon leaked into alerts: " + message);
+            }
+        }
+    }
+
     private static void verifyCatalogTypos() {
         String[][] cases = {
             { "devil_rift", "Somethlng feels off..." },
@@ -106,7 +123,6 @@ final class EventReplay {
             { "strange_scientist", "[Event] The strange scientlst has arrived." },
             { "devil_rumors", "[Event] Someb0dy has seen a silhouette." },
             { "guarded_rift", "[Event] A guarded r1ft opens." },
-            { "devil_assault", "[Event] The Devil AssauIt approaches." },
             { "corrupted_night", "[Event] Corrupted Niqht is here." },
             { "green_star", "[Event] A Green Sfar rises." },
             { "divine_general", "[Event] The Divine GeneraI has arrived." },

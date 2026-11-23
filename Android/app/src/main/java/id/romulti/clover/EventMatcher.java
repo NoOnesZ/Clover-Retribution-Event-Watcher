@@ -21,6 +21,8 @@ final class EventMatcher {
         "^(?:(?:sphere|orb) )?(?:has |have |now |begins to )?(?:gl|glo|glow(?:s|ing)?|shin(?:e[sd]?|ing)|"
             + "gleam(?:s|ing)?|appear(?:s|ed)?|emerge(?:s|d)?|descend(?:s|ed)?|materializ(?:es|ed)|spawn(?:s|ed)?)(?: |$)");
     private static final Pattern SPHERE = Pattern.compile("(?:^| )(?:sphere|orb)(?: |$)");
+    private static final Pattern GIANT_SEAL = Pattern.compile(
+        "^(?:the )?se[a4][l1i] (?:ha[s5] )?[s5]ha[t7l1]{2}[e3]r[a-z0-9]{0,5}(?: |$)");
     private static final int MAX_STAR_LINES = 5;
 
     static Frame scan(List<String> lines, boolean includeCommon) {
@@ -77,7 +79,7 @@ final class EventMatcher {
             }
             if (rule == null) continue;
             frame.readable = true;
-            if (rule.enabledByDefault || includeCommon) {
+            if (rule != CloverRules.GIANT_DEMON && (rule.enabledByDefault || includeCommon)) {
                 String key = rule == CloverRules.UNKNOWN ? rule.id + ":" + bodyKey(body) : rule.id;
                 frame.events.add(new Detection(rule, body, key));
             }
@@ -93,6 +95,7 @@ final class EventMatcher {
     }
 
     private static Rule findRule(String line, boolean tagged) {
+        if (tagged && GIANT_SEAL.matcher(line).find()) return CloverRules.GIANT_DEMON;
         for (Rule rule : CloverRules.NAMED) {
             if ((!tagged && !rule.priority) || !rule.matches(line)) continue;
             if (!tagged && rule.id.equals("devil_rift") && !line.contains("feels off")) continue;

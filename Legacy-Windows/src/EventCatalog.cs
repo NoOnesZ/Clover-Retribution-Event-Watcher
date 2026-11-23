@@ -171,6 +171,9 @@ namespace RoMulti
     public static class EventCatalog
     {
         private static readonly string[] StarCounts = { "one", "two", "three", "four", "five", "six", "seven" };
+        private static readonly Regex GiantSeal = new Regex(
+            @"^(?:event )?(?:the )?se[a4][l1i] (?:ha[s5] )?[s5]ha[t7l1]{2}[e3]r[a-z0-9]{0,5}(?: |$)",
+            RegexOptions.Compiled);
         private static readonly Regex StarOpening = new Regex(
             @"^(?:event )?([a-z0-9]+) stars? (?:gl|glo|glow(?:s|ing)?|shine(?:s)?|appear(?:s)?|emerge(?:s)?)(?: |$)",
             RegexOptions.Compiled);
@@ -355,14 +358,15 @@ namespace RoMulti
             new EventRule
             {
                 Id = "devil_assault",
-                DisplayName = "Devil Assault (Giant Devil)",
+                DisplayName = "Devil Assault (Giant Demon)",
                 Category = "Unique World Event",
-                Hint = "Giant Devil marching from Tundra toward Capital",
+                Hint = "Seal shattered / Giant Demon marching toward Capital",
                 EmbedColor = 0xEF4444,
-                DefaultLevel = EventAlertLevel.Normal,
+                DefaultLevel = EventAlertLevel.Ignore,
                 TokenGroups = new[]
                 {
                     new[] { "giant", "devil" },
+                    new[] { "giant", "demon" },
                     new[] { "devil", "assault" },
                     new[] { "toward", "capital" }
                 }
@@ -1022,6 +1026,8 @@ namespace RoMulti
 
         private static EventRule FindNamedRule(string normalizedLine, bool tagged = false)
         {
+            if (GiantSeal.IsMatch(normalizedLine))
+                return Rules.First(rule => rule.Id == "devil_assault");
             if (tagged)
             {
                 var star = FindStarRule(normalizedLine);

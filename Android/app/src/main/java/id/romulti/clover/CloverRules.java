@@ -4,6 +4,10 @@ package id.romulti.clover;
 final class CloverRules {
     private CloverRules() {}
 
+    static final EventMatcher.Rule GIANT_DEMON = new EventMatcher.Rule(
+        "devil_assault", "Devil Assault (Giant Demon)", 0xEF4444, false, false,
+        "giant devil|giant demon|devil assault|toward capital");
+
     static final String[] STAR_COUNTS = {"one", "two", "three", "four", "five", "six", "seven"};
     static final EventMatcher.Rule[] STAR_EVENTS = createStarEvents();
 
@@ -36,8 +40,7 @@ final class CloverRules {
             "rumors desert village|word desert village|desert village|seen something survive|seen something rumors|somebody seen|somebody something|somebody survive|sornebody seen|sornebod seen|sornebody sornetning|sornebody something|survive tell|somebod seen|somebo seen|somebod survive|rumors desert"),
         new EventMatcher.Rule("guarded_rift", "Guarded Rift", 0x8B5CF6, true, false,
             "guarded rift|shadow hand|shadowhand|rift shrouded|sinister mana|stands watch guarding|rift incursion"),
-        new EventMatcher.Rule("devil_assault", "Devil Assault (Giant Devil)", 0xEF4444, true, false,
-            "giant devil|devil assault|toward capital"),
+        GIANT_DEMON,
         new EventMatcher.Rule("corrupted_night", "Corrupted Night", 0x7C3AED, true, false,
             "air grows heavy|grows heavy|darkness takes hold|consumed corruption|creature corruption|corrupted night"),
         new EventMatcher.Rule("green_star", "A Green Star (Oath Ring)", 0x22C55E, true, false,

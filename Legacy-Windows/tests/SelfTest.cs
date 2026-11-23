@@ -849,6 +849,9 @@ namespace RoMulti
                 { "devil_rumors", "[Event] Someb0dy has seen a silhouette." },
                 { "guarded_rift", "[Event] A guarded r1ft opens." },
                 { "devil_assault", "[Event] The Devil AssauIt approaches." },
+                { "devil_assault", "[Event] The seal has shattered walks the land, and its gaze is" },
+                { "devil_assault", "[Event] The seal has shattere E1 walks the land, and its gaze is" },
+                { "devil_assault", "[Event] The sea1 has shatterd and the Giant Demon walks the land." },
                 { "corrupted_night", "[Event] Corrupted Niqht is here." },
                 { "green_star", "[Event] A Green Sfar rises." },
                 { "divine_general", "[Event] The Divine GeneraI has arrived." },
@@ -867,6 +870,11 @@ namespace RoMulti
                 {
                     Console.WriteLine("FAIL: Typo case " + cases[i, 0] + " classified as " +
                         string.Join(",", matches.Select(m => m.Rule.Id)) + ": " + cases[i, 1]);
+                    return false;
+                }
+                if (cases[i, 0] == "devil_assault" && matches[0].EffectiveLevel != EventAlertLevel.Ignore)
+                {
+                    Console.WriteLine("FAIL: Giant Demon should be ignored by default.");
                     return false;
                 }
             }
