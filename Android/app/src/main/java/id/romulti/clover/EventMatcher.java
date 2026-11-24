@@ -8,8 +8,8 @@ import java.util.regex.Pattern;
 
 final class EventMatcher {
     private static final Pattern EVENT = Pattern.compile(
-        "^\\s*(?:[\\[(]\\s*(?:[ectfk][vw]e(?:nt|ni|nf|nl|n7|m|rn|nto|nt0)|l[e3][a4o]k|leek)(?:[o0l]?\\s*[\\]):|]|l?\\b)"
-            + "|(?:event|eveni|evenf|evento|leak|leek)\\s*[\\]):|])\\s*",
+        "^\\s*[,.'\";:_-]*\\s*(?:[\\[(]\\s*(?:[ectfk][vw]e(?:nt|ni|nf|nl|n7|m|rn|nto|nt0)|l[e3][a4o]k|leek)(?:[o0l]?\\s*[\\]):|']|l?\\b)"
+            + "|(?:event|eveni|evenf|evento|leak|leek)\\s*[\\]):|'])\\s*",
         Pattern.CASE_INSENSITIVE);
     private static final Pattern OTHER_TAG = Pattern.compile(
         "^\\s*[\\[(]?\\s*(?:tips?|system|clover system|raid|server|global)\\s*[\\]):|]",

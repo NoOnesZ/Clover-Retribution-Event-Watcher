@@ -23,8 +23,14 @@ final class CloverRules {
         "primal werewolf|fierce howl|howl echoes|werewolf emerges|untamed power|radiating raw|"
             + "final roar|werewolf collapses|wild fury|fury extinguished|werewolf");
 
+    static final EventMatcher.Rule JUNGLE_BOSSES = new EventMatcher.Rule(
+        "jungle_bosses", "Jungle Bosses (Crocodile / Mammoth)", 0x78716C, false, false,
+        "crocodile|black scaled|surfaced southern|southern waters|mammoth|black backed|"
+            + "shaking western|shakin western|western ridge");
+
     static boolean isAlwaysMuted(EventMatcher.Rule rule) {
-        return rule == GIANT_DEMON || rule == VAMPIRE_CASTLE || rule == EMBER_RAID || rule == PRIMAL_WEREWOLF;
+        return rule == GIANT_DEMON || rule == VAMPIRE_CASTLE || rule == EMBER_RAID
+            || rule == PRIMAL_WEREWOLF || rule == JUNGLE_BOSSES;
     }
 
     static final String[] STAR_COUNTS = {"one", "two", "three", "four", "five", "six", "seven"};
@@ -69,6 +75,7 @@ final class CloverRules {
         VAMPIRE_CASTLE,
         EMBER_RAID,
         PRIMAL_WEREWOLF,
+        JUNGLE_BOSSES,
         new EventMatcher.Rule("corrupted_night", "Corrupted Night", 0x7C3AED, true, false,
             "air grows heavy|grows heavy|darkness takes hold|consumed corruption|creature corruption|corrupted night"),
         new EventMatcher.Rule("green_star", "A Green Star (Oath Ring)", 0x22C55E, true, false,

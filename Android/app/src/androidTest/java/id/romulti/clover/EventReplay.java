@@ -166,7 +166,10 @@ final class EventReplay {
                 "untamed power."),
             Arrays.asList(
                 "[Event] With a final roar, the Primal Werewolf collapses, his wild fury",
-                "extinguished.")
+                "extinguished."),
+            Arrays.asList("[Event] A black-scaled giant crocodile has surfaced near the southern waters."),
+            Arrays.asList("[Event] A black-backed mammoth is shaking the western ridge."),
+            Arrays.asList(", [Event)'A black:backednlanunothis shakin western ridge.—")
         );
         for (List<String> lines : cases) {
             for (boolean includeCommon : new boolean[] {false, true}) {

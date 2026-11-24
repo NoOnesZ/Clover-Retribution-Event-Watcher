@@ -633,6 +633,27 @@ namespace RoMulti
                     new[] { "werewolf" }
                 }
             },
+            new EventRule
+            {
+                Id = "jungle_bosses",
+                DisplayName = "Jungle Bosses (Crocodile / Mammoth)",
+                Category = "Jungle Boss (Ignored)",
+                Hint = "Black-scaled giant crocodile (southern waters) & Black-backed mammoth (western ridge)",
+                EmbedColor = 0x78716C,
+                DefaultLevel = EventAlertLevel.Ignore,
+                TokenGroups = new[]
+                {
+                    new[] { "crocodile" },
+                    new[] { "black", "scaled" },
+                    new[] { "surfaced", "southern" },
+                    new[] { "southern", "waters" },
+                    new[] { "mammoth" },
+                    new[] { "black", "backed" },
+                    new[] { "shaking", "western" },
+                    new[] { "shakin", "western" },
+                    new[] { "western", "ridge" }
+                }
+            },
 
             // --- Catch-All for any unrecognized [Event] broadcast ---
             new EventRule

@@ -1067,13 +1067,17 @@ namespace RoMulti
                 "[Event] A fierce howl echoes as the Primal Werewolf emerges, radiating raw,",
                 "untamed power.",
                 "[Event] With a final roar, the Primal Werewolf collapses, his wild fury",
-                "extinguished."
+                "extinguished.",
+                "[Event] A black-scaled giant crocodile has surfaced near the southern waters.",
+                "[Event] A black-backed mammoth is shaking the western ridge.",
+                ", [Event)'A black:backednlanunothis shakin western ridge.\u2014"
             };
             var matches = EventCatalog.MatchAllOccurrences(vampireChat, config);
             if (matches.Any(m => m.EffectiveLevel != EventAlertLevel.Ignore) ||
                 matches.Any(m => m.Rule.Id == "unknown_event") ||
                 !matches.Any(m => m.Rule.Id == "vampire_castle") ||
-                !matches.Any(m => m.Rule.Id == "primal_werewolf"))
+                !matches.Any(m => m.Rule.Id == "primal_werewolf") ||
+                matches.Count(m => m.Rule.Id == "jungle_bosses") != 3)
             {
                 Console.WriteLine("FAIL: Vampire/Lucius/Kaldris/Werewolf events must all be ignored and never leak into alerts: " +
                     string.Join(", ", matches.Select(m => m.Rule.Id + ":" + m.EffectiveLevel)));
