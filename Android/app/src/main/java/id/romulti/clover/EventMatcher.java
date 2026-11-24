@@ -9,7 +9,11 @@ import java.util.regex.Pattern;
 final class EventMatcher {
     private static final Pattern EVENT = Pattern.compile(
         "^\\s*[,.'\";:_-]*\\s*(?:[\\[(]\\s*(?:[ectfk][vw][ec](?:nt|ni|nf|nl|n7|m|rn|nto|nt0)|l[e3][a4o]k|leek)(?:[o0l]?\\s*[\\]):|']|l?\\b)"
-            + "|(?:event|eveni|evenf|evento|leak|leek)\\s*[\\]):|'])\\s*",
+            + "|(?:event|eveni|evenf|evento|leak|leek)\\s*[\\]):|']"
+            + "|(?:l[e3][a4o]k|leek)(?=\\s+(?:something|somethin|omethin|is\\s*leakin|leakin|leaking)))\\s*",
+        Pattern.CASE_INSENSITIVE);
+    private static final Pattern EXPLICIT_LEAK_TAG = Pattern.compile(
+        "^\\s*(?:[\\[(.:',;|]\\s*(?:l[e3][a4o]k|leek)(?:[o0l]?\\s*[\\]):|']|(?=\\s+[A-Za-z]))|(?:l[e3][a4o]k|leek)[o0l]?\\s*[\\]):|'])",
         Pattern.CASE_INSENSITIVE);
     private static final Pattern OTHER_TAG = Pattern.compile(
         "^\\s*[\\[(]?\\s*(?:tips?|system|clover system|raid|server|global)\\s*[\\]):|]",
@@ -93,6 +97,9 @@ final class EventMatcher {
 
             if (isDespawnOrEnd(normalized) || containsAny(normalized, CloverRules.TIP_PHRASES)) continue;
             Rule rule = star != null ? star : findRule(normalized, tagged);
+            if (rule == null && EXPLICIT_LEAK_TAG.matcher(line).find()) {
+                rule = findNamedById("leak_event");
+            }
             if (rule == null && tagged && isReadableUnknown(body)) {
                 rule = CloverRules.UNKNOWN;
             }
@@ -111,6 +118,13 @@ final class EventMatcher {
                 PLAYER.matcher(line).find()) return false;
         String normalized = normalize(line);
         return !startsRift(normalized) && !startsPriorityWisp(normalized) && findStarRule(normalized, false) == null;
+    }
+
+    private static Rule findNamedById(String id) {
+        for (Rule rule : CloverRules.NAMED) {
+            if (rule.id.equals(id)) return rule;
+        }
+        return null;
     }
 
     private static Rule findRule(String line, boolean tagged) {

@@ -65,7 +65,7 @@ final class CloverRules {
         new EventMatcher.Rule("void_wisp", "Void Wisp", 0x6366F1, true, false,
             "void wisp|leaking hell"),
         new EventMatcher.Rule("leak_event", "Leak Event (Bug Report Item)", 0xEF4444, true, false,
-            "something leaking|leaking grasslands|leak leaking|is leaking|leakingin"),
+            "something leaking|something leakin|somethin leakin|leaking grasslands|leakin grasslands|leak leaking|leak leakin|is leaking|leakingin|isleakin"),
         new EventMatcher.Rule("strange_scientist", "Strange Scientist", 0x14B8A6, true, false,
             "veil shimmers|lone figure emerges|strange scientist"),
         new EventMatcher.Rule("devil_rumors", "Desert Town: Devil Rumors", 0xDC2626, false, false,

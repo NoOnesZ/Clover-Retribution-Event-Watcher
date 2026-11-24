@@ -438,9 +438,9 @@ public final class MainActivity extends Activity {
             String name = Build.VERSION.SDK_INT >= 33
                 ? pm.getPackageInfo(getPackageName(), PackageManager.PackageInfoFlags.of(0)).versionName
                 : pm.getPackageInfo(getPackageName(), 0).versionName;
-            return (name != null && !name.trim().isEmpty()) ? name.trim() : "1.4.2";
+            return (name != null && !name.trim().isEmpty()) ? name.trim() : "1.4.3";
         } catch (Exception ignored) {
-            return "1.4.2";
+            return "1.4.3";
         }
     }
 }

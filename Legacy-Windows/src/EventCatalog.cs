@@ -352,10 +352,15 @@ namespace RoMulti
                 TokenGroups = new[]
                 {
                     new[] { "something", "leaking" },
+                    new[] { "something", "leakin" },
+                    new[] { "somethin", "leakin" },
                     new[] { "leaking", "grasslands" },
+                    new[] { "leakin", "grasslands" },
                     new[] { "leak", "leaking" },
+                    new[] { "leak", "leakin" },
                     new[] { "is", "leaking" },
-                    new[] { "leakingin" }
+                    new[] { "leakingin" },
+                    new[] { "isleakin" }
                 }
             },
             new EventRule
@@ -692,6 +697,7 @@ namespace RoMulti
         private static readonly Regex NonAlphaNumRegex = new Regex(@"[^a-z0-9\s]", RegexOptions.Compiled);
         private static readonly Regex MultiSpaceRegex = new Regex(@"\s+", RegexOptions.Compiled);
         private static readonly Regex EventTagRegex = new Regex(@"(^|\s)(?:[\[\(\.:',;\|]\s*(?:[ectfk][vw][ec](?:nt|ni|nf|nl|n7|m|rn)|l[e3][a4o]k|leek)|(?:e[vw]e(?:nt|ni|nf|nl|n7|m|rn)|l[e3][a4o]k|leek))([o0l]?\s*[\]\)\|':]|[o0l](?=\s)|(?=\s+[A-Za-z]))", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        private static readonly Regex ExplicitLeakTagRegex = new Regex(@"^\s*(?:[\[\(\.:',;\|]\s*(?:l[e3][a4o]k|leek)(?:[o0l]?\s*[\]\)\|':]|(?=\s+[A-Za-z]))|(?:l[e3][a4o]k|leek)[o0l]?\s*[\]\)\|'])", RegexOptions.IgnoreCase | RegexOptions.Compiled);
         private static readonly Regex NonEventPrefixRegex = new Regex(@"^\s*[\[\(\.:',;\|]?\s*(tips?|system|clover\s+system|raid)(\s*[\]\)\|':]|(?=\s+[A-Za-z]))", RegexOptions.IgnoreCase | RegexOptions.Compiled);
         private static readonly Regex AnyChatTagStartRegex = new Regex(@"^\s*(?:[\[\(\.:',;\|]\s*(?:[ectfk][vw][ec](?:nt|ni|nf|nl|n7|m|rn)|l[e3][a4o]k|leek|tips?|system|clover\s+system|raid|server|global)|(?:e[vw]e(?:nt|ni|nf|nl|n7|m|rn)|l[e3][a4o]k|leek|tips?|system|clover\s+system|raid|server|global))([o0l]?\s*[\]\)\|':]|[o0l](?=\s)|(?=\s+[A-Za-z]))", RegexOptions.IgnoreCase | RegexOptions.Compiled);
         private static readonly Regex InlineSecondTagRegex = new Regex(@"\s[\[\(\.:',;\|]\s*(event[o0]?|leak|tips?|system|clover\s+system|raid)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
@@ -1162,6 +1168,8 @@ namespace RoMulti
                 }
 
                 EventRule named = FindNamedRule(norm, tagged: EventTagRegex.IsMatch(msg));
+                if (named == null && ExplicitLeakTagRegex.IsMatch(msg))
+                    named = Rules.FirstOrDefault(r => r.Id == "leak_event");
                 if (named != null)
                 {
                     consumedIndices.Add(i);

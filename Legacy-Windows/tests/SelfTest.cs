@@ -1248,12 +1248,22 @@ namespace RoMulti
                     string.Join(", ", gdMatches.Select(m => m.Rule.Id + ":" + m.RawLine)));
                 return false;
             }
-            // Leak event + valid spawn wording ("rumbles", "silence", "muffled", "unsettled") & non-leak lines must remain immune
-            var leakCheck = EventCatalog.MatchLines(new[] { "[Leak] Something is leaking in the grasslands..." }, config);
-            if (leakCheck.Count != 1 || leakCheck[0].Rule.Id != "leak_event")
+            // Leak event + degraded red-on-red Leak OCR variants + valid spawn wording & non-leak lines
+            var leakVariants = new[]
             {
-                Console.WriteLine("FAIL T1-2: leak_event was suppressed!");
-                return false;
+                "[Leak] Something is leaking in the grasslands...",
+                "Leak omethin isleakin .in he rassEand ...",
+                "Leak Somethin isleakin in the rasstand",
+                "[Leak] S0m3th1ng 1s l34k1n in gr4ss"
+            };
+            foreach (string lv in leakVariants)
+            {
+                var leakCheck = EventCatalog.MatchLines(new[] { lv }, config);
+                if (leakCheck.Count != 1 || leakCheck[0].Rule.Id != "leak_event")
+                {
+                    Console.WriteLine("FAIL T1-2: leak_event missed/suppressed for: " + lv);
+                    return false;
+                }
             }
             var nonDespawnAndNonLeak = new[]
             {
@@ -1442,7 +1452,7 @@ namespace RoMulti
                 DiscordNotifier.ComputeRetryDelayMs(1, TimeSpan.FromSeconds(1.8)) != 1800 ||
                 DiscordNotifier.ComputeRetryDelayMs(1, TimeSpan.FromSeconds(30)) != 5000 ||
                 DiscordNotifier.ComputeRetryDelayMs(1, TimeSpan.FromDays(40000)) != 5000 ||
-                MainWindow.AppVersion != "v1.4.2")
+                MainWindow.AppVersion != "v1.4.3")
             {
                 Console.WriteLine("FAIL T3-4b: DiscordNotifier retry delay clamping or MainWindow.AppVersion mismatch.");
                 return false;

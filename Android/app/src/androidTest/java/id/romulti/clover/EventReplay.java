@@ -324,6 +324,9 @@ final class EventReplay {
             { "wind_wisp", "A windwisp stirs the leaves" },
             { "blood_wisp", "A bloodwisp has appeared across the grasslands" },
             { "light_wisp", "A lightwisp has appeared across the grasslands" },
+            { "leak_event", "Leak omethin isleakin .in he rassEand ..." },
+            { "leak_event", "Leak Somethin isleakin in the rasstand" },
+            { "leak_event", "[Leak] S0m3th1ng 1s l34k1n in gr4ss" },
             { "unknown_event", "[Event] Devil Rlft and felt throughout klngdom" }
         };
         for (String[] c : intentCases) {

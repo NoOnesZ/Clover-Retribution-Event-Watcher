@@ -20,7 +20,7 @@ namespace RoMulti
 {
     public sealed class MainWindow : Window
     {
-        internal const string AppVersion = "v1.4.2";
+        internal const string AppVersion = "v1.4.3";
         private const int PeriodicTrimIntervalSeconds = 45;
         private const int AutomaticFocusIdleMs = 5000;
 
