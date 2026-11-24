@@ -17,14 +17,19 @@ final class AndroidOcrPipeline {
     static final class BandPasses {
         final Bitmap cleanPass;
         final Bitmap isolatedPass;
+        final Bitmap purplePass;
         final int scale;
+        final int purpleScale;
         final int pad;
         final int rawCropWidth;
 
-        BandPasses(Bitmap cleanPass, Bitmap isolatedPass, int scale, int pad, int rawCropWidth) {
+        BandPasses(Bitmap cleanPass, Bitmap isolatedPass, Bitmap purplePass,
+                int scale, int purpleScale, int pad, int rawCropWidth) {
             this.cleanPass = cleanPass;
             this.isolatedPass = isolatedPass;
+            this.purplePass = purplePass;
             this.scale = scale;
+            this.purpleScale = purpleScale;
             this.pad = pad;
             this.rawCropWidth = rawCropWidth;
         }
@@ -32,6 +37,7 @@ final class AndroidOcrPipeline {
         void recycle() {
             if (cleanPass != null && !cleanPass.isRecycled()) cleanPass.recycle();
             if (isolatedPass != null && !isolatedPass.isRecycled()) isolatedPass.recycle();
+            if (purplePass != null && !purplePass.isRecycled()) purplePass.recycle();
         }
     }
 
@@ -55,21 +61,36 @@ final class AndroidOcrPipeline {
         int cropH = rawCrop.getHeight();
         int scale = OcrTextCore.computeUpscaleFactor(cropW, cropH);
         int pad = OcrTextCore.PAD_PX;
+        int purpleScale = Math.max(scale, 5);
+        int maxEdge = Math.max(cropW, cropH);
+        while (purpleScale > 2 && (maxEdge * purpleScale) + (pad * 2) > OcrTextCore.MAX_UPSCALED_EDGE) {
+            purpleScale--;
+        }
+
+        int[] rawPixels = new int[cropW * cropH];
+        rawCrop.getPixels(rawPixels, 0, cropW, 0, 0, cropW, cropH);
 
         Bitmap cleanPass = null;
         Bitmap isolatedPass = null;
+        Bitmap purplePass = null;
         try {
-            cleanPass = buildCleanUpscaled(rawCrop, scale, pad);
-            isolatedPass = buildStrokeIsolatedUpscaled(rawCrop, scale, pad);
-            return new BandPasses(cleanPass, isolatedPass, scale, pad, cropW);
+            cleanPass = buildCleanUpscaled(rawCrop, rawPixels, scale, pad);
+            isolatedPass = buildUpscaledFromPixels(
+                OcrTextCore.isolateOutlinedChatPixels(rawPixels, cropW, cropH), cropW, cropH, scale, pad);
+            int[] purplePixels = OcrTextCore.isolatePurpleEventPixels(rawPixels, cropW, cropH);
+            if (purplePixels != null) {
+                purplePass = buildUpscaledFromPixels(purplePixels, cropW, cropH, purpleScale, pad);
+            }
+            return new BandPasses(cleanPass, isolatedPass, purplePass, scale, purpleScale, pad, cropW);
         } catch (RuntimeException failure) {
             if (cleanPass != null && !cleanPass.isRecycled()) cleanPass.recycle();
             if (isolatedPass != null && !isolatedPass.isRecycled()) isolatedPass.recycle();
+            if (purplePass != null && !purplePass.isRecycled()) purplePass.recycle();
             throw failure;
         }
     }
 
-    private static Bitmap buildCleanUpscaled(Bitmap rawCrop, int scale, int pad) {
+    private static Bitmap buildCleanUpscaled(Bitmap rawCrop, int[] rawPixels, int scale, int pad) {
         int w = rawCrop.getWidth();
         int h = rawCrop.getHeight();
         int dstW = (w * scale) + (pad * 2);
@@ -79,12 +100,10 @@ final class AndroidOcrPipeline {
         Bitmap sharpened = null;
         try {
             if (scale >= 2 && w >= 3 && h >= 3) {
-                int[] pixels = new int[w * h];
-                rawCrop.getPixels(pixels, 0, w, 0, 0, w, h);
                 // Pre-upscale sharpening restores 1px low-res strokes cleanly without ringing
                 // and runs on the compact raw crop (up to 16x fewer pixels than post-upscale).
                 float amount = scale >= 3 ? 0.22f : 0.14f;
-                int[] sharpPixels = OcrTextCore.sharpenPixels(pixels, w, h, amount);
+                int[] sharpPixels = OcrTextCore.sharpenPixels(rawPixels, w, h, amount);
                 sharpened = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
                 sharpened.setPixels(sharpPixels, 0, w, 0, 0, w, h);
                 source = sharpened;
@@ -105,13 +124,7 @@ final class AndroidOcrPipeline {
         }
     }
 
-    private static Bitmap buildStrokeIsolatedUpscaled(Bitmap rawCrop, int scale, int pad) {
-        int w = rawCrop.getWidth();
-        int h = rawCrop.getHeight();
-        int[] srcPixels = new int[w * h];
-        rawCrop.getPixels(srcPixels, 0, w, 0, 0, w, h);
-        int[] isoPixels = OcrTextCore.isolateOutlinedChatPixels(srcPixels, w, h);
-
+    private static Bitmap buildUpscaledFromPixels(int[] isoPixels, int w, int h, int scale, int pad) {
         Bitmap isolated = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
         try {
             isolated.setPixels(isoPixels, 0, w, 0, 0, w, h);

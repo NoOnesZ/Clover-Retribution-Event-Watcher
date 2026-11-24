@@ -172,6 +172,65 @@ final class OcrTextCore {
     }
 
     /**
+     * Dedicated outlined-purple isolator for Priority #1 Devil Rift ("[Event] Something feels off...").
+     * Eliminates surrounding cyan [Tips], green [System], orange [Raid], white player chat, and
+     * uniform neon purple floors (via 5x5 dark TextStroke check). Returns null when no outlined
+     * purple text is present so normal frames incur zero extra ML Kit overhead.
+     */
+    static int[] isolatePurpleEventPixels(int[] srcArgb, int w, int h) {
+        int count = w * h;
+        int[] luma = new int[count];
+        int[] purpleSig = new int[count];
+        int candidates = 0;
+
+        for (int i = 0; i < count; i++) {
+            int px = srcArgb[i];
+            int r = (px >>> 16) & 0xFF;
+            int g = (px >>> 8) & 0xFF;
+            int b = px & 0xFF;
+            luma[i] = (r * 30 + g * 59 + b * 11) / 100;
+            int sig = Math.min(r - g, b - g);
+            if (sig >= 18 && b >= 95 && r >= 70) {
+                purpleSig[i] = sig;
+                candidates++;
+            }
+        }
+        if (candidates < 25) return null;
+
+        int[] out = new int[count];
+        int outlined = 0;
+        for (int y = 0; y < h; y++) {
+            int row = y * w;
+            int yMin = Math.max(0, y - 2);
+            int yMax = Math.min(h - 1, y + 2);
+            for (int x = 0; x < w; x++) {
+                int idx = row + x;
+                int outVal = 255;
+                int sig = purpleSig[idx];
+                if (sig >= 18) {
+                    int minL = 255;
+                    int xMin = Math.max(0, x - 2);
+                    int xMax = Math.min(w - 1, x + 2);
+                    for (int ny = yMin; ny <= yMax; ny++) {
+                        int nRow = ny * w;
+                        for (int nx = xMin; nx <= xMax; nx++) {
+                            int vL = luma[nRow + nx];
+                            if (vL < minL) minL = vL;
+                        }
+                    }
+                    if (minL <= 84) {
+                        int str = Math.min(255, (int) ((sig - 15) * 3.3));
+                        outVal = 255 - str;
+                        if (outVal < 180) outlined++;
+                    }
+                }
+                out[idx] = 0xFF000000 | (outVal << 16) | (outVal << 8) | outVal;
+            }
+        }
+        return outlined >= 20 ? out : null;
+    }
+
+    /**
      * Gentle 3x3 unsharp mask to restore crisp letter edges after low-res upscaling.
      */
     static int[] sharpenPixels(int[] srcArgb, int w, int h, float amount) {

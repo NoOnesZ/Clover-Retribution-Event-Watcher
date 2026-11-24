@@ -79,6 +79,31 @@ public final class DetectorChecks {
             throw new AssertionError("Outlined purple text core was not isolated to dark ink: " + centerVal);
         }
 
+        // Dedicated purple Devil Rift isolator: rejects uniform purple floor & cyan [Tips], isolates outlined purple text
+        int pw = 24, ph = 24;
+        int[] uniformPurple = new int[pw * ph];
+        Arrays.fill(uniformPurple, 0xFF9C4BF5);
+        if (OcrTextCore.isolatePurpleEventPixels(uniformPurple, pw, ph) != null) {
+            throw new AssertionError("Uniform neon purple floor must not trigger purple event pass.");
+        }
+        int[] outlinedPurpleBlock = new int[pw * ph];
+        Arrays.fill(outlinedPurpleBlock, 0xFF1A1A20);
+        for (int y = 6; y < 14; y++) {
+            for (int x = 4; x < 16; x++) {
+                outlinedPurpleBlock[y * pw + x] = 0xFF9C4BF5;
+            }
+        }
+        // Add cyan [Tips] pixels below: must be wiped to pure white
+        for (int y = 17; y < 21; y++) {
+            for (int x = 4; x < 16; x++) {
+                outlinedPurpleBlock[y * pw + x] = 0xFF4CC4F0;
+            }
+        }
+        int[] purpleOut = OcrTextCore.isolatePurpleEventPixels(outlinedPurpleBlock, pw, ph);
+        if (purpleOut == null || (purpleOut[7 * pw + 5] & 0xFF) >= 120 || purpleOut[18 * pw + 8] != 0xFFFFFFFF) {
+            throw new AssertionError("Purple Devil Rift isolator failed to keep purple strokes or wipe cyan [Tips].");
+        }
+
         // Geometric HUD slicing + right-shifted HUD removal + Y-band quality merge
         int scale = 3;
         int pad = OcrTextCore.PAD_PX;

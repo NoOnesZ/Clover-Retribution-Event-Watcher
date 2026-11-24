@@ -24,6 +24,14 @@ final class EventMatcher {
     private static final Pattern SPHERE = Pattern.compile("(?:^| )(?:sphere|orb)(?: |$)");
     private static final Pattern GIANT_SEAL = Pattern.compile(
         "^(?:the )?se[a4][l1i] (?:ha[s5] )?[s5]ha[t7l1]{2}[e3]r[a-z0-9]{0,5}(?: |$)");
+    private static final Pattern DEVIL_GLUED_FEELS_OFF = Pattern.compile(
+        "\\bf[e3c][e3c][ltib1dr][s5z]?(?:[o0][f1t]{1,2}|oh)\\b");
+    private static final Pattern DEVIL_FUZZY_FEELS = Pattern.compile(
+        "\\bf[e3c][e3c][ltib1d][s5z]?\\b");
+    private static final Pattern DEVIL_SPLIT_SOMETHING = Pattern.compile(
+        "\\b(?:s[o0]m[e3]|s[o0]rn[e3]|s[o0]rr[e3])t\\s*h[a-z0-9]{1,5}\\b");
+    private static final Pattern DEVIL_OFF_WORD = Pattern.compile(
+        "\\b(?:[o0][f1t]{2}|oh)\\b");
     private static final int MAX_STAR_LINES = 5;
 
     static Frame scan(List<String> lines, boolean includeCommon) {
@@ -61,7 +69,7 @@ final class EventMatcher {
                 }
             }
 
-            if (normalized.isEmpty() || (!tagged && star == null && !startsRift(normalized) && !startsPriorityWisp(normalized))) continue;
+            if (normalized.isEmpty() || (!tagged && star == null && !startsRift(normalized) && !startsPriorityWisp(normalized) && !isDevilRiftFuzzyBroadcast(normalized, false))) continue;
 
             if (star == null && index + 1 < lines.size() && !endsSentence(body)) {
                 String next = lines.get(index + 1).trim();
@@ -97,6 +105,7 @@ final class EventMatcher {
 
     private static Rule findRule(String line, boolean tagged) {
         if (tagged && GIANT_SEAL.matcher(line).find()) return CloverRules.GIANT_DEMON;
+        if (isDevilRiftFuzzyBroadcast(line, tagged)) return CloverRules.NAMED[0];
         for (Rule rule : CloverRules.NAMED) {
             if ((!tagged && !rule.priority) || !rule.matches(line)) continue;
             if (!tagged && rule.id.equals("devil_rift") && !line.contains("feels off")) continue;
@@ -218,6 +227,65 @@ final class EventMatcher {
             if (++changed > 1 || !nearWord(a[i], b[i])) return false;
         }
         return true;
+    }
+
+    private static boolean isDevilRiftFuzzyBroadcast(String line, boolean tagged) {
+        if (line == null || line.isEmpty()) return false;
+        if (line.contains("leaking") || line.contains("somebody") || line.contains("sornebody")
+                || line.contains("survive") || line.contains("desert") || line.contains("village")
+                || line.contains("seen") || line.contains("shiftlock")) {
+            return false;
+        }
+        if (line.contains("something feels") || line.contains("feels off")) {
+            return true;
+        }
+        String[] words = line.split(" ");
+        boolean hasSomething = false;
+        for (String w : words) {
+            if (isNearSomething(w)) {
+                hasSomething = true;
+                break;
+            }
+        }
+        boolean hasSplitSomething = !hasSomething && DEVIL_SPLIT_SOMETHING.matcher(line).find();
+        if (!hasSomething && !hasSplitSomething) {
+            return tagged && DEVIL_GLUED_FEELS_OFF.matcher(line).find();
+        }
+        if (DEVIL_GLUED_FEELS_OFF.matcher(line).find()) return true;
+        if (DEVIL_FUZZY_FEELS.matcher(line).find()) return true;
+        if (tagged && line.contains(" off")) return true;
+        return tagged && DEVIL_OFF_WORD.matcher(line).find() && !line.endsWith(" oh");
+    }
+
+    private static boolean isNearSomething(String word) {
+        if (word == null || word.length() < 7 || word.length() > 11) return false;
+        if (word.startsWith("somebod") || word.startsWith("sornebod")) return false;
+        String sk = ocrSkeleton(word).replace("rr", "m");
+        if (!sk.startsWith("so")) return false;
+        if (sk.equals("something") || sk.equals("somethin")) return true;
+        return editDistanceAtMost(sk, "something", 2);
+    }
+
+    private static boolean editDistanceAtMost(String a, String b, int maxDist) {
+        if (Math.abs(a.length() - b.length()) > maxDist) return false;
+        int n = a.length();
+        int m = b.length();
+        int[] prev = new int[m + 1];
+        int[] curr = new int[m + 1];
+        for (int j = 0; j <= m; j++) prev[j] = j;
+        for (int i = 1; i <= n; i++) {
+            curr[0] = i;
+            int rowMin = curr[0];
+            for (int j = 1; j <= m; j++) {
+                int cost = a.charAt(i - 1) == b.charAt(j - 1) ? 0 : 1;
+                int val = Math.min(Math.min(prev[j] + 1, curr[j - 1] + 1), prev[j - 1] + cost);
+                curr[j] = val;
+                if (val < rowMin) rowMin = val;
+            }
+            if (rowMin > maxDist) return false;
+            int[] tmp = prev; prev = curr; curr = tmp;
+        }
+        return prev[m] <= maxDist;
     }
 
     private static boolean nearWord(String first, String second) {

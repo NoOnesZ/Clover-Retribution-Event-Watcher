@@ -319,7 +319,7 @@ public final class WatchService extends Service {
                     }, task2 -> {
                         if (!band.isolatedPass.isRecycled()) band.isolatedPass.recycle();
                         if (!active || frameGeneration != generation || !isVisible) {
-                            recycleBands(bands, index + 1);
+                            recycleBands(bands, index);
                             inFlight = false;
                             return;
                         }
@@ -327,18 +327,38 @@ public final class WatchService extends Service {
                             ? AndroidOcrPipeline.extractPositionedLines(task2.getResult(), "p2", band.scale, band.pad, band.rawCropWidth)
                             : null;
                         if (pass1 == null && pass2 == null) {
-                            recycleBands(bands, index + 1);
+                            recycleBands(bands, index);
                             inFlight = false;
                             if (active) setStatus("Aktif · OCR gagal. Scan akan dicoba lagi.");
                             return;
                         }
                         List<OcrTextCore.PositionedLine> merged = OcrTextCore.mergePasses(pass1, pass2);
-                        List<String> bandLines = OcrTextCore.toLineTexts(merged);
-                        if (!bandLines.isEmpty()) {
-                            if (!lines.isEmpty()) lines.add("");
-                            lines.addAll(bandLines);
+                        if (band.purplePass != null && !band.purplePass.isRecycled()) {
+                            try {
+                                recognizer.process(InputImage.fromBitmap(band.purplePass, 0)).addOnCompleteListener(command -> {
+                                    if (!worker.post(command)) command.run();
+                                }, task3 -> {
+                                    if (!band.purplePass.isRecycled()) band.purplePass.recycle();
+                                    if (!active || frameGeneration != generation || !isVisible) {
+                                        recycleBands(bands, index + 1);
+                                        inFlight = false;
+                                        return;
+                                    }
+                                    List<OcrTextCore.PositionedLine> finalMerged = merged;
+                                    if (task3.isSuccessful()) {
+                                        List<OcrTextCore.PositionedLine> pass3 = AndroidOcrPipeline.extractPositionedLines(
+                                            task3.getResult(), "p3", band.purpleScale, band.pad, band.rawCropWidth);
+                                        finalMerged = OcrTextCore.mergePasses(merged, pass3);
+                                    }
+                                    appendBandAndContinue(bands, index, lines, finalMerged, frameGeneration);
+                                });
+                            } catch (RuntimeException failure) {
+                                if (!band.purplePass.isRecycled()) band.purplePass.recycle();
+                                appendBandAndContinue(bands, index, lines, merged, frameGeneration);
+                            }
+                        } else {
+                            appendBandAndContinue(bands, index, lines, merged, frameGeneration);
                         }
-                        recognizeBand(bands, index + 1, lines, frameGeneration);
                     });
                 } catch (RuntimeException failure) {
                     recycleBands(bands, index);
@@ -351,6 +371,20 @@ public final class WatchService extends Service {
             inFlight = false;
             if (active) setStatus("Aktif · OCR gagal. Scan akan dicoba lagi.");
         }
+    }
+
+    private void appendBandAndContinue(
+            List<AndroidOcrPipeline.BandPasses> bands,
+            int index,
+            List<String> lines,
+            List<OcrTextCore.PositionedLine> merged,
+            int frameGeneration) {
+        List<String> bandLines = OcrTextCore.toLineTexts(merged);
+        if (!bandLines.isEmpty()) {
+            if (!lines.isEmpty()) lines.add("");
+            lines.addAll(bandLines);
+        }
+        recognizeBand(bands, index + 1, lines, frameGeneration);
     }
 
     private void onRecognized(List<String> lines) {

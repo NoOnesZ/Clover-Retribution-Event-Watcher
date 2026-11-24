@@ -1063,7 +1063,28 @@ namespace RoMulti
                     return false;
                 }
             }
-            Console.WriteLine("[OCR] Ignored (Vampire/Lucius/Kaldris/Werewolf) & Priority (Spirit Rift + Wind/Blood/Light Wisps): OK");
+
+            // Ultra-low-res Priority #1 Devil Rift OCR variants (60%-100% scale)
+            var devilLowResVariants = new[]
+            {
+                "[Event] Something feels off...",
+                "[Eventl Something feels off...",
+                "(Cvent) Something feeb off...",
+                "(Cvent) Somethinz feetsoff...",
+                "(Cvent) Something feets OH...",
+                "(Cvent ) Somet hmc feels off..",
+                "(Cvent) Somet hint off..."
+            };
+            foreach (var dLine in devilLowResVariants)
+            {
+                var found = EventCatalog.MatchLines(new[] { dLine }, config);
+                if (found.Count != 1 || found[0].Rule.Id != "devil_rift" || found[0].EffectiveLevel != EventAlertLevel.Ping)
+                {
+                    Console.WriteLine("FAIL: Low-res Priority #1 Devil Rift missed: " + dLine);
+                    return false;
+                }
+            }
+            Console.WriteLine("[OCR] Ignored (Vampire/Lucius/Kaldris/Werewolf) & Priority (All-In Devil Rift + Spirit Rift + Wind/Blood/Light Wisps): OK");
             return true;
         }
 

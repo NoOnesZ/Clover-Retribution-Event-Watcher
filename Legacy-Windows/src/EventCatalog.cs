@@ -174,6 +174,18 @@ namespace RoMulti
         private static readonly Regex GiantSeal = new Regex(
             @"^(?:event )?(?:the )?se[a4][l1i] (?:ha[s5] )?[s5]ha[t7l1]{2}[e3]r[a-z0-9]{0,5}(?: |$)",
             RegexOptions.Compiled);
+        private static readonly Regex DevilRiftGluedFeelsOff = new Regex(
+            @"\bf[e3c][e3c][ltib1dr][s5z]?(?:[o0][f1t]{1,2}|oh)\b",
+            RegexOptions.Compiled);
+        private static readonly Regex DevilRiftFuzzyFeels = new Regex(
+            @"\bf[e3c][e3c][ltib1d][s5z]?\b",
+            RegexOptions.Compiled);
+        private static readonly Regex DevilRiftSplitSomething = new Regex(
+            @"\b(?:s[o0]m[e3]|s[o0]rn[e3]|s[o0]rr[e3])t\s*h[a-z0-9]{1,5}\b",
+            RegexOptions.Compiled);
+        private static readonly Regex DevilRiftOffWord = new Regex(
+            @"\b(?:[o0][f1t]{2}|oh)\b",
+            RegexOptions.Compiled);
         private static readonly Regex StarOpening = new Regex(
             @"^(?:event )?([a-z0-9]+) stars? (?:gl|glo|glow(?:s|ing)?|shine(?:s)?|appear(?:s)?|emerge(?:s)?)(?: |$)",
             RegexOptions.Compiled);
@@ -1138,6 +1150,8 @@ namespace RoMulti
         {
             if (GiantSeal.IsMatch(normalizedLine))
                 return Rules.First(rule => rule.Id == "devil_assault");
+            if (IsDevilRiftFuzzyBroadcast(normalizedLine, tagged))
+                return Rules.First(rule => rule.Id == "devil_rift");
             if (tagged)
             {
                 var star = FindStarRule(normalizedLine);
@@ -1300,6 +1314,81 @@ namespace RoMulti
                 if (matched && anchor && approximate == 1) return true;
             }
             return false;
+        }
+
+        private static bool IsDevilRiftFuzzyBroadcast(string normalizedLine, bool tagged)
+        {
+            if (string.IsNullOrEmpty(normalizedLine)) return false;
+            if (normalizedLine.Contains("leaking") || normalizedLine.Contains("somebody") ||
+                normalizedLine.Contains("sornebody") || normalizedLine.Contains("survive") ||
+                normalizedLine.Contains("desert") || normalizedLine.Contains("village") ||
+                normalizedLine.Contains("seen") || normalizedLine.Contains("shiftlock"))
+                return false;
+
+            if (normalizedLine.Contains("something feels") || normalizedLine.Contains("feels off"))
+                return true;
+
+            string[] words = normalizedLine.Split(' ');
+            int somethingIdx = -1;
+            for (int i = 0; i < words.Length; i++)
+            {
+                if (IsNearSomething(words[i]))
+                {
+                    somethingIdx = i;
+                    break;
+                }
+            }
+            bool hasSplitSomething = somethingIdx < 0 && DevilRiftSplitSomething.IsMatch(normalizedLine);
+            if (somethingIdx < 0 && !hasSplitSomething)
+            {
+                // If [Event] tag is present and "feels off" / glued "feetsoff" is clear even if "Something" clipped
+                return tagged && DevilRiftGluedFeelsOff.IsMatch(normalizedLine);
+            }
+
+            if (DevilRiftGluedFeelsOff.IsMatch(normalizedLine))
+                return true;
+            if (DevilRiftFuzzyFeels.IsMatch(normalizedLine))
+                return true;
+            if (tagged && normalizedLine.Contains(" off"))
+                return true;
+            if (tagged && DevilRiftOffWord.IsMatch(normalizedLine) && !normalizedLine.EndsWith(" oh"))
+                return true;
+            return false;
+        }
+
+        private static bool IsNearSomething(string word)
+        {
+            if (string.IsNullOrEmpty(word) || word.Length < 7 || word.Length > 11) return false;
+            if (word.StartsWith("somebod") || word.StartsWith("sornebod")) return false;
+            string sk = OcrSkeleton(word).Replace("rr", "m");
+            if (!sk.StartsWith("so")) return false;
+            if (sk == "something" || sk == "somethin") return true;
+            return EditDistanceAtMost(sk, "something", 2);
+        }
+
+        private static bool EditDistanceAtMost(string a, string b, int maxDist)
+        {
+            if (Math.Abs(a.Length - b.Length) > maxDist) return false;
+            int n = a.Length;
+            int m = b.Length;
+            int[] prev = new int[m + 1];
+            int[] curr = new int[m + 1];
+            for (int j = 0; j <= m; j++) prev[j] = j;
+            for (int i = 1; i <= n; i++)
+            {
+                curr[0] = i;
+                int rowMin = curr[0];
+                for (int j = 1; j <= m; j++)
+                {
+                    int cost = a[i - 1] == b[j - 1] ? 0 : 1;
+                    int val = Math.Min(Math.Min(prev[j] + 1, curr[j - 1] + 1), prev[j - 1] + cost);
+                    curr[j] = val;
+                    if (val < rowMin) rowMin = val;
+                }
+                if (rowMin > maxDist) return false;
+                var tmp = prev; prev = curr; curr = tmp;
+            }
+            return prev[m] <= maxDist;
         }
 
         private static bool NearOcrWord(string first, string second)

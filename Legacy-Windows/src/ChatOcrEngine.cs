@@ -429,7 +429,23 @@ namespace RoMulti
                 MergePositionedLines(positioned, lines2);
             }
 
-            // Pass 3 (low-res / bright-sky colored fallback): run when Pass 1+2 read 0 lines, OR on very compact low-res
+            // Pass 3 (ALL-IN Priority #1 Devil Rift Purple-Channel isolation):
+            // Only runs when outlined purple event pixels exist in the crop (< 0.4ms check when absent).
+            // Wipes cyan [Tips] above/below, green [System], white chat, and neon purple floors cleanly
+            // to pure white so "[Event] Something feels off..." stays razor-sharp even at 60% low-res!
+            int purpleScale = Math.Max(scale, 5);
+            while (purpleScale > 2 && (Math.Max(rawCrop.Width, rawCrop.Height) * purpleScale) + (pad * 2) > 2600)
+                purpleScale--;
+            using (var purplePass = IsolatePurpleEventText(rawCrop, purpleScale, pad))
+            {
+                if (purplePass != null)
+                {
+                    var linesPurple = await RunWinRtOcrPositionedAsync(engine, purplePass, cropTag + ":purple", purpleScale, pad, originY, previewOffsetY, rawCrop.Width);
+                    MergePositionedLines(positioned, linesPurple);
+                }
+            }
+
+            // Pass 4 (low-res / bright-sky colored fallback): run when prior passes read 0 lines, OR on very compact low-res
             // windows when no event/rift line was recovered yet (only replaces a Y-band if OCR quality is strictly higher).
             if (positioned.Count == 0 || (scale >= 4 && !HasAnyEventOrPriorityLine(positioned)))
             {
@@ -1073,6 +1089,136 @@ namespace RoMulti
             {
                 src.UnlockBits(srcData);
                 isolated.UnlockBits(dstData);
+            }
+
+            int dstW = (w * scale) + (pad * 2);
+            int dstH = (h * scale) + (pad * 2);
+            var upscaled = new Bitmap(dstW, dstH, PixelFormat.Format32bppArgb);
+            using (var g = Graphics.FromImage(upscaled))
+            {
+                g.Clear(Color.White);
+                g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                g.DrawImage(isolated, pad, pad, w * scale, h * scale);
+            }
+            isolated.Dispose();
+            return upscaled;
+        }
+
+        /// <summary>
+        /// Dedicated outlined-purple isolator for Priority #1 Devil Rift ("[Event] Something feels off...").
+        /// Eliminates surrounding cyan [Tips], green [System], orange [Raid], white player chat, AND
+        /// uniform neon purple floors (via 5x5 dark TextStroke check) so purple [Event] letters read cleanly
+        /// even when downscaled to tiny 6px low-res fonts. Returns null immediately if no outlined purple
+        /// text is present, adding zero OCR latency on normal frames.
+        /// </summary>
+        private static Bitmap IsolatePurpleEventText(Bitmap src, int scale, int pad)
+        {
+            int w = src.Width;
+            int h = src.Height;
+
+            var rect = new Rectangle(0, 0, w, h);
+            BitmapData srcData = src.LockBits(rect, ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+            byte[] sBuf;
+            int srcStride;
+            try
+            {
+                srcStride = srcData.Stride;
+                sBuf = new byte[Math.Abs(srcStride) * h];
+                Marshal.Copy(srcData.Scan0, sBuf, 0, sBuf.Length);
+            }
+            finally
+            {
+                src.UnlockBits(srcData);
+            }
+
+            byte[] luma = new byte[w * h];
+            byte[] purpleSig = new byte[w * h];
+            int candidateCount = 0;
+
+            for (int y = 0; y < h; y++)
+            {
+                int sRow = y * srcStride;
+                int pRow = y * w;
+                for (int x = 0; x < w; x++)
+                {
+                    int idx = sRow + x * 4;
+                    int b = sBuf[idx];
+                    int g = sBuf[idx + 1];
+                    int r = sBuf[idx + 2];
+                    luma[pRow + x] = (byte)((r * 30 + g * 59 + b * 11) / 100);
+                    int sig = Math.Min(r - g, b - g);
+                    if (sig >= 18 && b >= 95 && r >= 70)
+                    {
+                        purpleSig[pRow + x] = (byte)(sig > 255 ? 255 : sig);
+                        candidateCount++;
+                    }
+                }
+            }
+
+            if (candidateCount < 25) return null;
+
+            // Verify outlined purple strokes (must sit near a dark TextStroke pixel to exclude uniform purple walls/floors)
+            var isolated = new Bitmap(w, h, PixelFormat.Format32bppArgb);
+            BitmapData dstData = isolated.LockBits(rect, ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb);
+            int outlinedPurple = 0;
+            try
+            {
+                int dstStride = dstData.Stride;
+                byte[] dBuf = new byte[Math.Abs(dstStride) * h];
+
+                for (int y = 0; y < h; y++)
+                {
+                    int dRow = y * dstStride;
+                    int pRow = y * w;
+                    int yMin = y > 2 ? y - 2 : 0;
+                    int yMax = y + 2 < h ? y + 2 : h - 1;
+                    for (int x = 0; x < w; x++)
+                    {
+                        int outVal = 255;
+                        int sig = purpleSig[pRow + x];
+                        if (sig >= 18)
+                        {
+                            byte minL = 255;
+                            int xMin = x > 2 ? x - 2 : 0;
+                            int xMax = x + 2 < w ? x + 2 : w - 1;
+                            for (int ny = yMin; ny <= yMax; ny++)
+                            {
+                                int nRow = ny * w;
+                                for (int nx = xMin; nx <= xMax; nx++)
+                                {
+                                    byte vL = luma[nRow + nx];
+                                    if (vL < minL) minL = vL;
+                                }
+                            }
+                            if (minL <= 84)
+                            {
+                                int str = (int)((sig - 15) * 3.3);
+                                if (str > 255) str = 255;
+                                outVal = 255 - str;
+                                if (outVal < 180) outlinedPurple++;
+                            }
+                        }
+
+                        int dIdx = dRow + x * 4;
+                        byte bo = (byte)outVal;
+                        dBuf[dIdx] = bo;
+                        dBuf[dIdx + 1] = bo;
+                        dBuf[dIdx + 2] = bo;
+                        dBuf[dIdx + 3] = 255;
+                    }
+                }
+                Marshal.Copy(dBuf, 0, dstData.Scan0, dBuf.Length);
+            }
+            finally
+            {
+                isolated.UnlockBits(dstData);
+            }
+
+            if (outlinedPurple < 20)
+            {
+                isolated.Dispose();
+                return null;
             }
 
             int dstW = (w * scale) + (pad * 2);

@@ -183,6 +183,32 @@ final class EventReplay {
                     + " priority=" + rule.priority + " color=" + Integer.toHexString(rule.color));
             }
         }
+
+        // Ultra-low-res degraded Priority #1 Devil Rift OCR variants (down to 60% scale)
+        String[] devilLowResVariants = {
+            "[Event] Something feels off...",
+            "[Eventl Something feels off...",
+            "(Cvent) Something feeb off...",
+            "(Cvent) Somethinz feetsoff...",
+            "(Cvent) Something feets OH...",
+            "(Cvent ) Somet hmc feels off..",
+            "(Cvent) Somet hint off..."
+        };
+        for (String line : devilLowResVariants) {
+            EventMatcher.Frame f = EventMatcher.scan(Arrays.asList(line), false);
+            if (f.events.size() != 1 || !f.events.get(0).rule.id.equals("devil_rift") || !f.events.get(0).rule.priority) {
+                throw new AssertionError("Low-res Devil Rift variant missed: " + line);
+            }
+        }
+        // Safety: Leak / Devil Rumors / Tips must NEVER false-trigger devil_rift
+        EventMatcher.Frame safeCheck = EventMatcher.scan(Arrays.asList(
+            "[Leak] Something is leaking in the grasslands...",
+            "[Event] Somebody has seen something they might not survive to tell, word has it they're in the Desert Village...",
+            "[Tips] You can turn shiftlock on and off with the Left Control key."
+        ), false);
+        if (safeCheck.events.size() != 1 || !safeCheck.events.get(0).rule.id.equals("leak_event")) {
+            throw new AssertionError("Devil Rift fuzzy matcher false-triggered on Leak/Rumors/Tips!");
+        }
     }
 
     private static void verifyLowResTagsAndNoise() {
