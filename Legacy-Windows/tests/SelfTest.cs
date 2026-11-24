@@ -1081,6 +1081,9 @@ namespace RoMulti
                 Replay(history, config, start, 21, "corrupted_night", "[Event] The air grows heavy as darkness takes hold.") &&
                 Replay(history, config, start, 24, "green_star", "[Event] A green star rises.");
             string[] names = { "One", "Two", "Three", "Four", "Five", "Six", "Seven" };
+            string[] verbs = { " star burns in the sky.", " stars align, forging alliances in the face of looming shadows.",
+                " stars converge above the realm.", " stars mark the corners of a journey.",
+                " stars unite across the horizon.", " stars awaken beyond the clouds.", " stars call out to destiny." };
             for (int i = 0; valid && i < names.Length; i++)
             {
                 string suffix = i == 0 ? " star glows." : " stars glow.";
@@ -1089,8 +1092,50 @@ namespace RoMulti
                 valid = Replay(named, config, start, 0, "", tip) &&
                     Replay(named, config, start, 3, id, "[Event] " + names[i] + suffix) &&
                     Replay(named, config, start, 6, "", "[Event] " + (i + 1) + suffix);
+
+                var poetic = new DiscordNotifier();
+                valid = valid &&
+                    Replay(poetic, config, start, 0, "", tip) &&
+                    Replay(poetic, config, start, 3, id, "[Event] " + names[i] + verbs[i]);
             }
-            if (valid) Console.WriteLine("[OCR] Stars 1-7, Four Stars OCR duplicates and Corrupted Night ending: OK");
+            // Real screenshot Two Stars (100%, 75% (Cvcnt) + atizn, 65% + atitn), glued & mid-sentence, plus safety guards
+            var twoStarCases = new[]
+            {
+                Tuple.Create("star_2", new[] { "[Event] Two stars align, forging alliances in the face of", "looming shadows, a bond stronger than fate." }),
+                Tuple.Create("star_2", new[] { "(Cvcnt) Two stars atizn, forging attianccs in thc face of", "looming shadows, a bond stronger than fate." }),
+                Tuple.Create("star_2", new[] { "(Cvent) two stars atitn, atban«s in the of", "shadows, a bond stronger than fate." }),
+                Tuple.Create("star_2", new[] { "Two stars align, forging alliances in the face of looming shadows." }),
+                Tuple.Create("star_2", new[] { "[Event] Behold, twostars awaken in the distance!" }),
+                Tuple.Create("star_1", new[] { "[Event] A lone star rises above the kingdom." }),
+                Tuple.Create("star_5", new[] { "[Event] A sphere carrying five stars descends from above." }),
+                Tuple.Create("green_star", new[] { "[Event] A green star rises." }),
+                Tuple.Create("unknown_event", new[] { "[Event] Two stars and four stars appear together." })
+            };
+            foreach (var tc in twoStarCases)
+            {
+                var found = EventCatalog.MatchLines(tc.Item2, config);
+                if (found.Count != 1 || found[0].Rule.Id != tc.Item1)
+                {
+                    Console.WriteLine("FAIL Star case expected " + tc.Item1 + ", got " +
+                        string.Join(",", found.Select(m => m.Rule.Id)) + " for: " + string.Join(" | ", tc.Item2));
+                    return false;
+                }
+            }
+            if (EventCatalog.MatchLines(new[]
+            {
+                "Four stars in inventory",
+                "4 stars",
+                "3 stars remaining",
+                "[Event] In the clasp of a determined soul, the star finds its purpose, its light",
+                "merging with a spirit aflame with purpose.",
+                "[Event] In the clasp of a determined soul, the star finds its purpose, its light",
+                "[Event] merging with a spirit aflame with purpose."
+            }, config).Count != 0)
+            {
+                Console.WriteLine("FAIL Star UI/inventory or Star-claimed despawn guard leaked!");
+                return false;
+            }
+            if (valid) Console.WriteLine("[OCR] Stars 1-7 (Dragon Ball), Four Stars OCR duplicates and Corrupted Night ending: OK");
             return valid;
         }
 
@@ -1392,7 +1437,7 @@ namespace RoMulti
                 DiscordNotifier.ComputeRetryDelayMs(1, TimeSpan.FromSeconds(1.8)) != 1800 ||
                 DiscordNotifier.ComputeRetryDelayMs(1, TimeSpan.FromSeconds(30)) != 5000 ||
                 DiscordNotifier.ComputeRetryDelayMs(1, TimeSpan.FromDays(40000)) != 5000 ||
-                MainWindow.AppVersion != "v1.4.0")
+                MainWindow.AppVersion != "v1.4.1")
             {
                 Console.WriteLine("FAIL T3-4b: DiscordNotifier retry delay clamping or MainWindow.AppVersion mismatch.");
                 return false;

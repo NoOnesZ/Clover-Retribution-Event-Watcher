@@ -8,7 +8,7 @@ import java.util.regex.Pattern;
 
 final class EventMatcher {
     private static final Pattern EVENT = Pattern.compile(
-        "^\\s*[,.'\";:_-]*\\s*(?:[\\[(]\\s*(?:[ectfk][vw]e(?:nt|ni|nf|nl|n7|m|rn|nto|nt0)|l[e3][a4o]k|leek)(?:[o0l]?\\s*[\\]):|']|l?\\b)"
+        "^\\s*[,.'\";:_-]*\\s*(?:[\\[(]\\s*(?:[ectfk][vw][ec](?:nt|ni|nf|nl|n7|m|rn|nto|nt0)|l[e3][a4o]k|leek)(?:[o0l]?\\s*[\\]):|']|l?\\b)"
             + "|(?:event|eveni|evenf|evento|leak|leek)\\s*[\\]):|'])\\s*",
         Pattern.CASE_INSENSITIVE);
     private static final Pattern OTHER_TAG = Pattern.compile(
@@ -16,12 +16,13 @@ final class EventMatcher {
         Pattern.CASE_INSENSITIVE);
     private static final Pattern PLAYER = Pattern.compile("^\\s*(?:\\[[^]]+\\]\\s*)?[\\w]{2,24}:\\s+\\S");
     private static final Pattern NON_WORD = Pattern.compile("[^a-z0-9]+");
-    private static final Pattern STAR_PREFIX = Pattern.compile("^(?:(?:event[o0]?|even[i1f]|the|a) )+");
-    private static final Pattern STAR_COUNT = Pattern.compile("\\b([a-z0-9]{1,7}) st[a4][rl1][s5]?\\b");
-    private static final Pattern STAR_ACTION = Pattern.compile(
-        "^(?:(?:sphere|orb) )?(?:has |have |now |begins to )?(?:gl|glo|glow(?:s|ing)?|shin(?:e[sd]?|ing)|"
-            + "gleam(?:s|ing)?|appear(?:s|ed)?|emerge(?:s|d)?|descend(?:s|ed)?|materializ(?:es|ed)|spawn(?:s|ed)?)(?: |$)");
-    private static final Pattern SPHERE = Pattern.compile("(?:^| )(?:sphere|orb)(?: |$)");
+    private static final Pattern STAR_PREFIX = Pattern.compile(
+        "^(?:(?:[ectfk][vw][ec](?:nt|ni|nf|nl|n7|m|rn|nto|nt0)|event[o0]?|even[i1f]|the|a) )+");
+    private static final Pattern STAR_COUNT = Pattern.compile("\\b([a-z0-9]{1,7})\\s+st[a4][rl1][s5]?\\b");
+    private static final Pattern STAR_GLUED = Pattern.compile(
+        "\\b(one|two|three|four|five|six|seven|single|lone|[1-7])st[a4][rl1][s5]?\\b");
+    private static final Pattern STAR_UI_REJECT = Pattern.compile(
+        "\\b(?:inventory|remaining|left|needed|collected|total|out of)\\b");
     private static final Pattern GIANT_SEAL = Pattern.compile(
         "^(?:the )?se[a4][l1i] (?:ha[s5] )?[s5]ha[t7l1]{2}[e3]r[a-z0-9]{0,5}(?: |$)");
     private static final Pattern DEVIL_GLUED_FEELS_OFF = Pattern.compile(
@@ -199,24 +200,50 @@ final class EventMatcher {
     }
 
     private static boolean startsStar(String line) {
-        String body = STAR_PREFIX.matcher(line).replaceFirst("");
+        String body = STAR_PREFIX.matcher(line).replaceFirst("").trim();
+        if (body.isEmpty() || body.contains("inventory")) return false;
         Matcher match = STAR_COUNT.matcher(body);
-        return (match.lookingAt() && starByCount(match.group(1)) != null) || starByCount(body) != null;
+        if (match.lookingAt() && starByCount(match.group(1)) != null) return true;
+        Matcher glued = STAR_GLUED.matcher(intentSkeleton(body));
+        if (glued.lookingAt() && starByCount(glued.group(1)) != null) return true;
+        return starByCount(body) != null;
     }
 
     private static Rule findStarRule(String line, boolean tagged) {
-        String body = STAR_PREFIX.matcher(line).replaceFirst("");
-        Matcher match = STAR_COUNT.matcher(body);
+        String body = STAR_PREFIX.matcher(line).replaceFirst("").trim();
+        if (body.isEmpty() || body.contains("inventory")) return null;
+        String skBody = intentSkeleton(body);
         if (!tagged) {
-            return match.lookingAt() && STAR_ACTION.matcher(body.substring(match.end()).trim()).find()
-                ? starByCount(match.group(1)) : null;
+            if (STAR_UI_REJECT.matcher(body).find()) return null;
+            Matcher head = STAR_COUNT.matcher(body);
+            boolean matchedSpaced = head.lookingAt();
+            Matcher gluedHead = matchedSpaced ? null : STAR_GLUED.matcher(skBody);
+            boolean matchedGlued = !matchedSpaced && gluedHead.lookingAt();
+            if (!matchedSpaced && !matchedGlued) return null;
+            String after = matchedSpaced
+                ? body.substring(head.end()).trim()
+                : skBody.substring(gluedHead.end()).trim();
+            if (after.isEmpty()) return null;
+            Rule first = starByCount(matchedSpaced ? head.group(1) : gluedHead.group(1));
+            if (first == null) return null;
+            Rule allCheck = findUniqueStarInBody(body, skBody);
+            return allCheck == first ? first : null;
         }
+        return findUniqueStarInBody(body, skBody);
+    }
 
+    private static Rule findUniqueStarInBody(String body, String skBody) {
         Rule candidate = null;
-        boolean hasSphere = SPHERE.matcher(body).find();
+        Matcher match = STAR_COUNT.matcher(body);
         while (match.find()) {
-            if (match.start() != 0 && !hasSphere && !STAR_ACTION.matcher(body.substring(match.end()).trim()).find()) continue;
             Rule star = starByCount(match.group(1));
+            if (star == null) continue;
+            if (candidate != null && candidate != star) return null;
+            candidate = star;
+        }
+        Matcher glued = STAR_GLUED.matcher(skBody);
+        while (glued.find()) {
+            Rule star = starByCount(glued.group(1));
             if (star == null) continue;
             if (candidate != null && candidate != star) return null;
             candidate = star;
@@ -225,16 +252,19 @@ final class EventMatcher {
     }
 
     private static Rule starByCount(String count) {
+        if (count == null || count.isEmpty()) return null;
         if (count.equals("single") || count.equals("lone")) return CloverRules.STAR_EVENTS[0];
         if (count.length() == 1 && count.charAt(0) >= '1' && count.charAt(0) <= '7')
             return CloverRules.STAR_EVENTS[count.charAt(0) - '1'];
+        String sk = intentSkeleton(count);
         for (int i = 0; i < CloverRules.STAR_COUNTS.length; i++) {
-            if (count.equals(CloverRules.STAR_COUNTS[i])) return CloverRules.STAR_EVENTS[i];
+            if (count.equals(CloverRules.STAR_COUNTS[i]) || sk.equals(CloverRules.STAR_COUNTS[i]))
+                return CloverRules.STAR_EVENTS[i];
         }
         Rule candidate = null;
         for (int i = 0; i < CloverRules.STAR_COUNTS.length; i++) {
             String word = CloverRules.STAR_COUNTS[i];
-            if (!nearWord(count, word)) continue;
+            if (word.length() < 4 || !nearWord(sk, word)) continue;
             if (candidate != null) return null;
             candidate = CloverRules.STAR_EVENTS[i];
         }

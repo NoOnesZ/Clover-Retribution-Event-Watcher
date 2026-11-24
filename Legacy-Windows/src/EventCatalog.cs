@@ -186,15 +186,24 @@ namespace RoMulti
         private static readonly Regex DevilRiftOffWord = new Regex(
             @"\b(?:[o0][f1t]{2}|oh)\b",
             RegexOptions.Compiled);
-        private static readonly Regex StarOpening = new Regex(
-            @"^(?:event )?([a-z0-9]+) stars? (?:gl|glo|glow(?:s|ing)?|shine(?:s)?|appear(?:s)?|emerge(?:s)?)(?: |$)",
+        private static readonly Regex StarPrefixRegex = new Regex(
+            @"^(?:(?:[ectfk][vw][ec](?:nt|ni|nf|nl|n7|m|rn|nto|nt0)|event[o0]?|even[i1f]|the|a)\s+)+",
+            RegexOptions.Compiled);
+        private static readonly Regex StarCountPairRegex = new Regex(
+            @"\b([a-z0-9]{1,7})\s+st[a4][rl1][s5]?\b",
+            RegexOptions.Compiled);
+        private static readonly Regex StarGluedPairRegex = new Regex(
+            @"\b(one|two|three|four|five|six|seven|single|lone|[1-7])st[a4][rl1][s5]?\b",
+            RegexOptions.Compiled);
+        private static readonly Regex StarUiRejectRegex = new Regex(
+            @"\b(?:inventory|remaining|left|needed|collected|total|out of)\b",
             RegexOptions.Compiled);
         private static readonly EventRule[] StarRules = Enumerable.Range(1, StarCounts.Length).Select(count => new EventRule
         {
             Id = "star_" + count,
-            DisplayName = count + (count == 1 ? " Star" : " Stars"),
+            DisplayName = count + (count == 1 ? " Star (Dragon Ball)" : " Stars (Dragon Ball)"),
             Category = "Stars",
-            Hint = "Numbered star broadcast",
+            Hint = "One/Two/Three/Four/Five/Six/Seven Star(s) broadcast",
             EmbedColor = 0xEAB308,
             DefaultLevel = EventAlertLevel.Normal
         }).ToArray();
@@ -678,9 +687,9 @@ namespace RoMulti
 
         private static readonly Regex NonAlphaNumRegex = new Regex(@"[^a-z0-9\s]", RegexOptions.Compiled);
         private static readonly Regex MultiSpaceRegex = new Regex(@"\s+", RegexOptions.Compiled);
-        private static readonly Regex EventTagRegex = new Regex(@"(^|\s)(?:[\[\(\.:',;\|]\s*(?:[ectfk][vw]e(?:nt|ni|nf|nl|n7|m|rn)|l[e3][a4o]k|leek)|(?:e[vw]e(?:nt|ni|nf|nl|n7|m|rn)|l[e3][a4o]k|leek))([o0l]?\s*[\]\)\|':]|[o0l](?=\s)|(?=\s+[A-Za-z]))", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        private static readonly Regex EventTagRegex = new Regex(@"(^|\s)(?:[\[\(\.:',;\|]\s*(?:[ectfk][vw][ec](?:nt|ni|nf|nl|n7|m|rn)|l[e3][a4o]k|leek)|(?:e[vw]e(?:nt|ni|nf|nl|n7|m|rn)|l[e3][a4o]k|leek))([o0l]?\s*[\]\)\|':]|[o0l](?=\s)|(?=\s+[A-Za-z]))", RegexOptions.IgnoreCase | RegexOptions.Compiled);
         private static readonly Regex NonEventPrefixRegex = new Regex(@"^\s*[\[\(\.:',;\|]?\s*(tips?|system|clover\s+system|raid)(\s*[\]\)\|':]|(?=\s+[A-Za-z]))", RegexOptions.IgnoreCase | RegexOptions.Compiled);
-        private static readonly Regex AnyChatTagStartRegex = new Regex(@"^\s*(?:[\[\(\.:',;\|]\s*(?:[ectfk][vw]e(?:nt|ni|nf|nl|n7|m|rn)|l[e3][a4o]k|leek|tips?|system|clover\s+system|raid|server|global)|(?:e[vw]e(?:nt|ni|nf|nl|n7|m|rn)|l[e3][a4o]k|leek|tips?|system|clover\s+system|raid|server|global))([o0l]?\s*[\]\)\|':]|[o0l](?=\s)|(?=\s+[A-Za-z]))", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        private static readonly Regex AnyChatTagStartRegex = new Regex(@"^\s*(?:[\[\(\.:',;\|]\s*(?:[ectfk][vw][ec](?:nt|ni|nf|nl|n7|m|rn)|l[e3][a4o]k|leek|tips?|system|clover\s+system|raid|server|global)|(?:e[vw]e(?:nt|ni|nf|nl|n7|m|rn)|l[e3][a4o]k|leek|tips?|system|clover\s+system|raid|server|global))([o0l]?\s*[\]\)\|':]|[o0l](?=\s)|(?=\s+[A-Za-z]))", RegexOptions.IgnoreCase | RegexOptions.Compiled);
         private static readonly Regex InlineSecondTagRegex = new Regex(@"\s[\[\(\.:',;\|]\s*(event[o0]?|leak|tips?|system|clover\s+system|raid)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
         private static readonly Regex PlayerChatPrefixRegex = new Regex(@"^\s*(\[[^\]]+\]\s*)?[A-Za-z0-9_]{2,24}\s*:\s+\S", RegexOptions.Compiled);
         private static readonly Regex HotbarSlotGluedRegex = new Regex(@"(^|\s)[1-9][A-Z][a-z]{2,}", RegexOptions.Compiled);
@@ -728,7 +737,9 @@ namespace RoMulti
             "retreat", "depart", "banish", "cease", "collaps", "dissolv",
             "reced", "sinks back", "returns to the", "returned to", "left the",
             "has ended", "event ended", "has closed", "portal closed", "rift closed", "closes",
-            "no longer", "calm returns", "peace returns", "overcome", "extinguished", "has fled", "was fled", "fled the", "expired"
+            "no longer", "calm returns", "peace returns", "overcome", "extinguished", "has fled", "was fled", "fled the", "expired",
+            "in the clasp", "clasp of", "determined soul", "finds its purpose", "star finds",
+            "merging with a spirit", "spirit aflame", "aflame with purpose", "claimed the star", "star has been claimed"
         };
 
         private static readonly string[] GluedDespawnCompounds = new[]
@@ -737,7 +748,9 @@ namespace RoMulti
             "hasdespawned", "hasdisappeared", "hassubsided", "hasended", "hasclosed",
             "wasslain", "beenslain", "hasperished", "fadesaway", "fadinginto",
             "leavingonly", "leavingont", "inhiswake", "initswake", "vowingrevenge",
-            "cruciblecools", "orderisrestored", "releasesitsgrip", "darkreign"
+            "cruciblecools", "orderisrestored", "releasesitsgrip", "darkreign",
+            "intheclasp", "determinedsoul", "findsitspurpose", "starfinds",
+            "mergingwithaspirit", "spiritaflame", "aflamewithpurpose"
         };
 
         private static readonly string[] FuzzyDespawnWords = new[]
@@ -1251,11 +1264,8 @@ namespace RoMulti
                 return Rules.First(rule => rule.Id == "devil_assault");
             if (IsDevilRiftFuzzyBroadcast(normalizedLine, tagged))
                 return Rules.First(rule => rule.Id == "devil_rift");
-            if (tagged)
-            {
-                var star = FindStarRule(normalizedLine);
-                if (star != null) return star;
-            }
+            var star = FindStarRule(normalizedLine, tagged);
+            if (star != null) return star;
 
             string[] words = normalizedLine.Split(' ');
             string compact = IntentSkeleton(normalizedLine).Replace(" ", "");
@@ -1331,18 +1341,73 @@ namespace RoMulti
                 NearOpeningBoth(words, start, "spirit", "wisp");
         }
 
-        private static EventRule FindStarRule(string normalizedLine)
+        private static EventRule FindStarRule(string normalizedLine, bool tagged)
         {
-            var opening = StarOpening.Match(normalizedLine);
-            if (!opening.Success) return null;
-            string count = opening.Groups[1].Value;
-            if (count.Length == 1 && count[0] >= '1' && count[0] <= '7') return StarRules[count[0] - '1'];
+            if (string.IsNullOrEmpty(normalizedLine)) return null;
+            string body = StarPrefixRegex.Replace(normalizedLine, "").Trim();
+            if (string.IsNullOrEmpty(body) || body.IndexOf("inventory", StringComparison.OrdinalIgnoreCase) >= 0)
+                return null;
+
+            string skBody = IntentSkeleton(body);
+            if (!tagged)
+            {
+                if (StarUiRejectRegex.IsMatch(body)) return null;
+                Match head = StarCountPairRegex.Match(body);
+                if (!head.Success || head.Index != 0)
+                    head = StarGluedPairRegex.Match(skBody);
+                if (!head.Success || head.Index != 0) return null;
+                string src = head.Value.IndexOf(' ') >= 0 ? body : skBody;
+                string after = src.Substring(head.Index + head.Length).Trim();
+                if (string.IsNullOrEmpty(after)) return null;
+                EventRule firstRule = ResolveStarByCount(head.Groups[1].Value);
+                if (firstRule == null) return null;
+                // Reject ambiguous tag-less lines containing a second distinct star count
+                EventRule allCheck = FindUniqueStarInBody(body, skBody);
+                return allCheck == firstRule ? firstRule : null;
+            }
+
+            return FindUniqueStarInBody(body, skBody);
+        }
+
+        private static EventRule FindUniqueStarInBody(string body, string skBody)
+        {
+            EventRule candidate = null;
+            foreach (Match m in StarCountPairRegex.Matches(body))
+            {
+                EventRule star = ResolveStarByCount(m.Groups[1].Value);
+                if (star == null) continue;
+                if (candidate != null && candidate != star) return null;
+                candidate = star;
+            }
+            foreach (Match m in StarGluedPairRegex.Matches(skBody))
+            {
+                EventRule star = ResolveStarByCount(m.Groups[1].Value);
+                if (star == null) continue;
+                if (candidate != null && candidate != star) return null;
+                candidate = star;
+            }
+            return candidate;
+        }
+
+        private static EventRule ResolveStarByCount(string rawCount)
+        {
+            if (string.IsNullOrEmpty(rawCount)) return null;
+            if (rawCount == "single" || rawCount == "lone") return StarRules[0];
+            if (rawCount.Length == 1 && rawCount[0] >= '1' && rawCount[0] <= '7')
+                return StarRules[rawCount[0] - '1'];
+
+            string sk = IntentSkeleton(rawCount);
+            for (int i = 0; i < StarCounts.Length; i++)
+            {
+                if (rawCount == StarCounts[i] || sk == StarCounts[i])
+                    return StarRules[i];
+            }
+
             EventRule candidate = null;
             for (int i = 0; i < StarCounts.Length; i++)
             {
                 string word = StarCounts[i];
-                if (count == word) return StarRules[i];
-                if (!NearOcrWord(count, word)) continue;
+                if (word.Length < 4 || !NearOcrWord(sk, word)) continue;
                 if (candidate != null) return null;
                 candidate = StarRules[i];
             }

@@ -105,6 +105,15 @@ final class EventReplay {
         expect(mixed, 21, "", "Four stars in inventory");
         expect(mixed, 24, "star_3", "[Event] In the distance, three stars shine.");
         String[] names = {"One", "Two", "Three", "Four", "Five", "Six", "Seven"};
+        String[] verbs = {
+            " star burns in the sky.",
+            " stars align, forging alliances in the face of looming shadows.",
+            " stars converge above the realm.",
+            " stars mark the corners of a journey.",
+            " stars unite across the horizon.",
+            " stars awaken beyond the clouds.",
+            " stars call out to destiny."
+        };
         for (int i = 0; i < names.length; i++) {
             String suffix = i == 0 ? " star glows." : " stars glow.";
             String id = "star_" + (i + 1);
@@ -112,7 +121,36 @@ final class EventReplay {
             expect(named, 0, "", TIP);
             expect(named, 3, id, "[Event] " + names[i] + suffix);
             expect(named, 6, "", (i + 1) + suffix);
+
+            EventHistory poetic = new EventHistory();
+            expect(poetic, 0, "", TIP);
+            expect(poetic, 3, id, "[Event] " + names[i] + verbs[i]);
         }
+        // Real Two Stars screenshot (100%, 75% (Cvcnt) + atizn, tag-less, glued, mid-sentence) + safety guards
+        EventHistory twoStars = new EventHistory();
+        expect(twoStars, 0, "", TIP);
+        expect(twoStars, 3, "star_2",
+            "[Event] Two stars align, forging alliances in the face of",
+            "looming shadows, a bond stronger than fate.");
+        expect(twoStars, 6, "",
+            "(Cvcnt) Two stars atizn, forging attianccs in thc face of",
+            "looming shadows, a bond stronger than fate.");
+        expect(twoStars, 9, "",
+            "Two stars align, forging alliances in the face of looming shadows.");
+        EventHistory starEdge = new EventHistory();
+        expect(starEdge, 0, "", TIP);
+        expect(starEdge, 3, "star_2", "Two stars align, forging alliances in the face of looming shadows.");
+        expect(starEdge, 6, "star_3", "[Event] Behold, threestars awaken in the distance!");
+        expect(starEdge, 9, "star_1", "[Event] A lone star rises above the kingdom.");
+        expect(starEdge, 12, "",
+            "4 stars",
+            "3 stars remaining",
+            "Four stars in inventory",
+            "[Event] In the clasp of a determined soul, the star finds its purpose, its light",
+            "merging with a spirit aflame with purpose.",
+            "[Event] merging with a spirit aflame with purpose.");
+        expect(starEdge, 15, "", "[Event] Two stars and four stars appear together.");
+        expect(starEdge, 18, "unknown_event", "[Event] Two stars and four stars appear together.");
     }
 
     private static void verifyMutedGiantDemon() {

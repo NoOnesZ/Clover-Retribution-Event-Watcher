@@ -40,7 +40,8 @@ final class CloverRules {
         EventMatcher.Rule[] rules = new EventMatcher.Rule[STAR_COUNTS.length];
         for (int i = 0; i < rules.length; i++) {
             int count = i + 1;
-            rules[i] = new EventMatcher.Rule("star_" + count, count + (count == 1 ? " Star" : " Stars"),
+            rules[i] = new EventMatcher.Rule("star_" + count,
+                count + (count == 1 ? " Star (Dragon Ball)" : " Stars (Dragon Ball)"),
                 0xEAB308, true, false, "");
         }
         return rules;
@@ -108,7 +109,9 @@ final class CloverRules {
         "mysteriously", "retreat", "depart", "banish", "cease", "collaps",
         "dissolv", "reced", "sinks back", "returns to the", "returned to", "left the",
         "has ended", "event ended", "has closed", "portal closed", "rift closed", "closes",
-        "no longer", "calm returns", "peace returns", "overcome", "extinguished", "has fled", "was fled", "fled the", "expired"
+        "no longer", "calm returns", "peace returns", "overcome", "extinguished", "has fled", "was fled", "fled the", "expired",
+        "in the clasp", "clasp of", "determined soul", "finds its purpose", "star finds",
+        "merging with a spirit", "spirit aflame", "aflame with purpose", "claimed the star", "star has been claimed"
     };
 
     static final String[] GLUED_DESPAWN_COMPOUNDS = {
@@ -116,7 +119,9 @@ final class CloverRules {
         "hasdespawned", "hasdisappeared", "hassubsided", "hasended", "hasclosed",
         "wasslain", "beenslain", "hasperished", "fadesaway", "fadinginto",
         "leavingonly", "leavingont", "inhiswake", "initswake", "vowingrevenge",
-        "cruciblecools", "orderisrestored", "releasesitsgrip", "darkreign"
+        "cruciblecools", "orderisrestored", "releasesitsgrip", "darkreign",
+        "intheclasp", "determinedsoul", "findsitspurpose", "starfinds",
+        "mergingwithaspirit", "spiritaflame", "aflamewithpurpose"
     };
 
     static final String[] FUZZY_DESPAWN_WORDS = {
