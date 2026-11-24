@@ -20,7 +20,7 @@ namespace RoMulti
 {
     public sealed class MainWindow : Window
     {
-        internal const string AppVersion = "v1.4.3";
+        internal const string AppVersion = "v1.4.4";
         private const int PeriodicTrimIntervalSeconds = 45;
         private const int AutomaticFocusIdleMs = 5000;
 
@@ -130,6 +130,7 @@ namespace RoMulti
             _config = RoMultiConfig.Load();
 
             Title = "RoMulti " + AppVersion + " — Roblox Multi-Instance, AFK Saver & Event Watcher";
+            Icon = CreateWindowIconSource();
             Width = 1180;
             Height = 810;
             MinWidth = 980;
@@ -1193,7 +1194,8 @@ namespace RoMulti
                 BorderBrush = BorderSubtle,
                 BorderThickness = new Thickness(1),
                 CornerRadius = new CornerRadius(10),
-                Padding = new Thickness(14, 10, 14, 10)
+                Padding = new Thickness(14, 10, 14, 10),
+                MinHeight = 195
             };
             var pGrid = new Grid();
             pGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -1251,7 +1253,8 @@ namespace RoMulti
                 BorderBrush = BorderSubtle,
                 BorderThickness = new Thickness(1),
                 CornerRadius = new CornerRadius(6),
-                Padding = new Thickness(4)
+                Padding = new Thickness(4),
+                MinHeight = 120
             };
             _previewImage = new System.Windows.Controls.Image
             {
@@ -1267,6 +1270,8 @@ namespace RoMulti
                 AcceptsReturn = true,
                 TextWrapping = TextWrapping.Wrap,
                 VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                MinHeight = 120,
+                MaxHeight = 240,
                 Background = BgCanvas,
                 Foreground = TextPrimary,
                 BorderBrush = BorderSubtle,
@@ -1286,8 +1291,16 @@ namespace RoMulti
             Grid.SetRow(previewCard, 2);
             leftGrid.Children.Add(previewCard);
 
-            Grid.SetColumn(leftGrid, 0);
-            grid.Children.Add(leftGrid);
+            var leftScroll = new ScrollViewer
+            {
+                Content = leftGrid,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                CanContentScroll = false,
+                Padding = new Thickness(0, 0, 4, 0)
+            };
+            Grid.SetColumn(leftScroll, 0);
+            grid.Children.Add(leftScroll);
 
             // --- RIGHT COLUMN: Clover Retribution 18-Rule Priority Matrix ---
             var rightCard = new Border
@@ -2611,6 +2624,7 @@ namespace RoMulti
             var dlg = new Window
             {
                 Title = "Rename Roblox Instance",
+                Icon = this.Icon,
                 Width = 380,
                 Height = 185,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -3102,21 +3116,103 @@ namespace RoMulti
             return col;
         }
 
+        private static Bitmap RenderAppIconBitmap(int size)
+        {
+            var bmp = new Bitmap(size, size, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+            try
+            {
+                using (var g = Graphics.FromImage(bmp))
+                {
+                    g.Clear(System.Drawing.Color.Transparent);
+                    g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.HighQuality;
+                    g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+                    g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
+                    g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+
+                    float pad = Math.Max(1f, size * 0.05f);
+                    var rect = new RectangleF(pad, pad, size - pad * 2f, size - pad * 2f);
+                    float r = size * 0.22f;
+                    float d = r * 2f;
+
+                    using (var path = new System.Drawing.Drawing2D.GraphicsPath())
+                    {
+                        path.AddArc(rect.X, rect.Y, d, d, 180, 90);
+                        path.AddArc(rect.Right - d, rect.Y, d, d, 270, 90);
+                        path.AddArc(rect.Right - d, rect.Bottom - d, d, d, 0, 90);
+                        path.AddArc(rect.X, rect.Bottom - d, d, d, 90, 90);
+                        path.CloseFigure();
+
+                        using (var bg = new System.Drawing.Drawing2D.LinearGradientBrush(
+                            rect,
+                            System.Drawing.Color.FromArgb(79, 143, 255),
+                            System.Drawing.Color.FromArgb(37, 99, 235),
+                            System.Drawing.Drawing2D.LinearGradientMode.Vertical))
+                        {
+                            g.FillPath(bg, path);
+                        }
+                        using (var border = new System.Drawing.Pen(System.Drawing.Color.FromArgb(90, 255, 255, 255), Math.Max(1f, size * 0.03f)))
+                        {
+                            g.DrawPath(border, path);
+                        }
+                    }
+
+                    using (var font = new Font("Segoe UI", size * 0.44f, System.Drawing.FontStyle.Bold, GraphicsUnit.Pixel))
+                    using (var fmt = new StringFormat(StringFormat.GenericTypographic))
+                    {
+                        fmt.Alignment = StringAlignment.Center;
+                        fmt.LineAlignment = StringAlignment.Center;
+                        var textRect = new RectangleF(0, size * 0.03f, size, size);
+                        if (size >= 32)
+                        {
+                            using (var shadow = new SolidBrush(System.Drawing.Color.FromArgb(70, 12, 26, 66)))
+                            {
+                                var shRect = new RectangleF(textRect.X, textRect.Y + Math.Max(1f, size * 0.03f), textRect.Width, textRect.Height);
+                                g.DrawString("R+", font, shadow, shRect, fmt);
+                            }
+                        }
+                        using (var fg = new SolidBrush(System.Drawing.Color.White))
+                        {
+                            g.DrawString("R+", font, fg, textRect, fmt);
+                        }
+                    }
+                }
+                return bmp;
+            }
+            catch
+            {
+                bmp.Dispose();
+                throw;
+            }
+        }
+
+        private static ImageSource CreateWindowIconSource()
+        {
+            try
+            {
+                using (var bmp = RenderAppIconBitmap(64))
+                using (var ms = new MemoryStream())
+                {
+                    bmp.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
+                    ms.Position = 0;
+                    var img = new BitmapImage();
+                    img.BeginInit();
+                    img.CacheOption = BitmapCacheOption.OnLoad;
+                    img.StreamSource = ms;
+                    img.EndInit();
+                    img.Freeze();
+                    return img;
+                }
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
         private static Icon CreateAppIcon()
         {
-            using (var bmp = new Bitmap(32, 32))
-            using (var g = Graphics.FromImage(bmp))
+            using (var bmp = RenderAppIconBitmap(32))
             {
-                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-                using (var bg = new SolidBrush(System.Drawing.Color.FromArgb(59, 130, 246)))
-                {
-                    g.FillRectangle(bg, 2, 2, 28, 28);
-                }
-                using (var font = new Font("Segoe UI", 13, System.Drawing.FontStyle.Bold))
-                using (var fg = new SolidBrush(System.Drawing.Color.White))
-                {
-                    g.DrawString("R+", font, fg, 2, 5);
-                }
                 IntPtr hIcon = bmp.GetHicon();
                 try
                 {

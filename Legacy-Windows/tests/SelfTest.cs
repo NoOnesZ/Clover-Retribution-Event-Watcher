@@ -1452,7 +1452,7 @@ namespace RoMulti
                 DiscordNotifier.ComputeRetryDelayMs(1, TimeSpan.FromSeconds(1.8)) != 1800 ||
                 DiscordNotifier.ComputeRetryDelayMs(1, TimeSpan.FromSeconds(30)) != 5000 ||
                 DiscordNotifier.ComputeRetryDelayMs(1, TimeSpan.FromDays(40000)) != 5000 ||
-                MainWindow.AppVersion != "v1.4.3")
+                MainWindow.AppVersion != "v1.4.4")
             {
                 Console.WriteLine("FAIL T3-4b: DiscordNotifier retry delay clamping or MainWindow.AppVersion mismatch.");
                 return false;

@@ -16,6 +16,11 @@ if (-not $OutExe) {
     $OutExe = Join-Path $Root "RoMulti.exe"
 }
 $Manifest = Join-Path $Root "app.manifest"
+$Icon = Join-Path $Root "app.ico"
+$ExtraArgs = @()
+if (Test-Path $Icon) {
+    $ExtraArgs += "/win32icon:$Icon"
+}
 
 $SrcFiles = @(
     (Join-Path $Root "src\NativeMethods.cs"),
@@ -52,7 +57,7 @@ $Refs = @(
 )
 
 Write-Host "Building RoMulti.exe (x64 WPF Native + AFK Saver + WinRT OCR Event Watcher + Anti-AFK)..."
-& $Csc /nologo /target:winexe /platform:x64 /optimize+ "/win32manifest:$Manifest" "/out:$OutExe" @Refs @SrcFiles
+& $Csc /nologo /target:winexe /platform:x64 /optimize+ "/win32manifest:$Manifest" @ExtraArgs "/out:$OutExe" @Refs @SrcFiles
 
 if ($LASTEXITCODE -ne 0) {
     throw "Build failed with exit code $LASTEXITCODE"
