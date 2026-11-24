@@ -8,7 +8,8 @@ import java.util.regex.Pattern;
 
 final class EventMatcher {
     private static final Pattern EVENT = Pattern.compile(
-        "^\\s*(?:[\\[(]\\s*(?:event|leak)(?:\\s*[\\]):|]|\\b)|(?:event|leak)\\s*[\\]):|])\\s*",
+        "^\\s*(?:[\\[(]\\s*(?:[ectfk][vw]e(?:nt|ni|nf|nl|n7|m|rn|nto|nt0)|l[e3][a4o]k|leek)(?:[o0l]?\\s*[\\]):|]|l?\\b)"
+            + "|(?:event|eveni|evenf|evento|leak|leek)\\s*[\\]):|])\\s*",
         Pattern.CASE_INSENSITIVE);
     private static final Pattern OTHER_TAG = Pattern.compile(
         "^\\s*[\\[(]?\\s*(?:tips?|system|clover system|server|global)\\s*[\\]):|]",
@@ -74,12 +75,13 @@ final class EventMatcher {
             if (containsAny(normalized, CloverRules.DESPAWN) || isCorruptedNightEnd(normalized) ||
                 containsAny(normalized, CloverRules.TIP_PHRASES)) continue;
             Rule rule = star != null ? star : findRule(normalized, tagged);
-            if (rule == null && tagged && normalized.split(" ").length >= 4) {
+            if (rule == null && tagged && isReadableUnknown(body)) {
                 rule = CloverRules.UNKNOWN;
             }
             if (rule == null) continue;
             frame.readable = true;
-            if (rule != CloverRules.GIANT_DEMON && (rule.enabledByDefault || includeCommon)) {
+            if (rule != CloverRules.GIANT_DEMON && rule != CloverRules.VAMPIRE_CASTLE
+                    && (rule.enabledByDefault || includeCommon)) {
                 String key = rule == CloverRules.UNKNOWN ? rule.id + ":" + bodyKey(body) : rule.id;
                 frame.events.add(new Detection(rule, body, key));
             }
@@ -204,8 +206,8 @@ final class EventMatcher {
 
     private static boolean nearWord(String first, String second) {
         if (Math.min(first.length(), second.length()) < 4) return false;
-        String a = first.replace("rn", "m");
-        String b = second.replace("rn", "m");
+        String a = ocrSkeleton(first);
+        String b = ocrSkeleton(second);
         if (Math.abs(a.length() - b.length()) > 1) return false;
         int i = 0;
         int j = 0;
@@ -221,6 +223,58 @@ final class EventMatcher {
             if (b.length() >= a.length()) j++;
         }
         return edits + a.length() - i + b.length() - j <= 1;
+    }
+
+    private static String ocrSkeleton(String word) {
+        String s = word.replace("rn", "m").replace("vv", "w");
+        StringBuilder sb = new StringBuilder(s.length());
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            switch (c) {
+                case '0': sb.append('o'); break;
+                case '1': sb.append('l'); break;
+                case '3': sb.append('e'); break;
+                case '4': sb.append('a'); break;
+                case '5': sb.append('s'); break;
+                default: sb.append(c); break;
+            }
+        }
+        return sb.toString();
+    }
+
+    private static boolean isReadableUnknown(String body) {
+        if (body == null || body.trim().length() < 16) return false;
+        String[] tokens = body.trim().split("\\s+");
+        int total = 0;
+        int clean = 0;
+        for (String tok : tokens) {
+            String trimmed = tok.replaceAll("^[^A-Za-z0-9]+|[^A-Za-z0-9]+$", "");
+            if (trimmed.isEmpty()) continue;
+            total++;
+            if (trimmed.length() == 1 && (trimmed.equalsIgnoreCase("a") || trimmed.equals("I"))) {
+                clean++;
+                continue;
+            }
+            if (trimmed.length() < 2) continue;
+            boolean ok = true;
+            boolean hasVowel = false;
+            int innerUpper = 0;
+            for (int i = 0; i < trimmed.length(); i++) {
+                char c = trimmed.charAt(i);
+                if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')) {
+                    char lc = Character.toLowerCase(c);
+                    if (lc == 'a' || lc == 'e' || lc == 'i' || lc == 'o' || lc == 'u' || lc == 'y') {
+                        hasVowel = true;
+                    }
+                    if (i > 0 && c >= 'A' && c <= 'Z') innerUpper++;
+                } else if (c != '\'' && c != '-') {
+                    ok = false;
+                    break;
+                }
+            }
+            if (ok && hasVowel && innerUpper == 0) clean++;
+        }
+        return total >= 4 && clean >= 4 && ((double) clean / total) >= 0.55;
     }
 
     private static boolean containsAny(String s, String[] values) {
@@ -247,6 +301,10 @@ final class EventMatcher {
             String[] groups = patterns.isEmpty() ? new String[0] : patterns.split("\\|");
             tokenGroups = new String[groups.length][];
             for (int i = 0; i < groups.length; i++) tokenGroups[i] = groups[i].split(" ");
+        }
+
+        boolean isCatchAll() {
+            return "unknown_event".equals(id);
         }
 
         boolean matches(String line) {

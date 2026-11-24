@@ -20,6 +20,8 @@ final class EventReplay {
         verifyStarBroadcasts();
         verifyLongStars();
         verifyMutedGiantDemon();
+        verifyMutedVampireCastle();
+        verifyLowResTagsAndNoise();
         EventHistory history = new EventHistory();
         expect(history, 0, "", TIP);
         expect(history, 3, "warlord", TIP, WARLORD);
@@ -109,6 +111,43 @@ final class EventReplay {
                 if (!frame.readable || !frame.events.isEmpty())
                     throw new AssertionError("Giant Demon leaked into alerts: " + message);
             }
+        }
+    }
+
+    private static void verifyMutedVampireCastle() {
+        List<List<String>> cases = Arrays.asList(
+            Arrays.asList("[Event] Stronger vampires can now be seen around the castle."),
+            Arrays.asList("[Eveni] Stronqer vampires can now be seen around the castle."),
+            Arrays.asList("[Event] The Elite of the vampires has been defeated."),
+            Arrays.asList("[Event] The Elite of the vampires appears near the castle."),
+            Arrays.asList(
+                "[Event] A shadow deepens across the land as Vampire Lord Lucius awakens,",
+                "bringing an ancient darkness with him."),
+            Arrays.asList("[Event] A shadow deepens across the land as Vampire Lord"),
+            Arrays.asList("[Event] Lucius falls, his dark reign fading into the shadows."),
+            Arrays.asList("[Event] Lucius falls, his dark reign")
+        );
+        for (List<String> lines : cases) {
+            for (boolean includeCommon : new boolean[] {false, true}) {
+                EventMatcher.Frame frame = EventMatcher.scan(lines, includeCommon);
+                if (!frame.readable || !frame.events.isEmpty()) {
+                    throw new AssertionError("Vampire/Lucius event leaked into alerts: " + lines);
+                }
+            }
+        }
+    }
+
+    private static void verifyLowResTagsAndNoise() {
+        EventMatcher.Frame typoTags = EventMatcher.scan(Arrays.asList(
+            "[Eveni] The air grows heavy, and darkness takes hold as every creature is consumed by corruption.",
+            "[Leek] Something is leaking in the grasslands...",
+            "[Tips] You can turn shiftlock on and off with the Left Control key.",
+            "[Event] zxq!mnb 2Shccp 3Culinary 9k"
+        ), false);
+        if (typoTags.events.size() != 2
+                || !typoTags.events.get(0).rule.id.equals("corrupted_night")
+                || !typoTags.events.get(1).rule.id.equals("leak_event")) {
+            throw new AssertionError("Low-res tag typos or noise filter failed: " + typoTags.events.size());
         }
     }
 

@@ -35,7 +35,6 @@ import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
 
 import java.net.URI;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -50,7 +49,7 @@ public final class WatchService extends Service {
     private static final String CHANNEL = "clover_capture";
     private static final int NOTICE_ID = 21;
     private static final int SCAN_MS = 3000;
-    private static final int MAX_EDGE = 1600;
+    private static final int MAX_EDGE = 2160;
     private static volatile boolean running;
 
     private HandlerThread thread;
@@ -254,75 +253,101 @@ public final class WatchService extends Service {
                 setStatus("Aktif · menunggu Roblox dalam posisi landscape.");
                 return;
             }
-            List<Bitmap> crops = cropChat(image);
+            List<AndroidOcrPipeline.BandPasses> bands = cropChat(image);
             inFlight = true;
-            recognize(crops, 0, new ArrayList<>(), generation);
+            recognizeBand(bands, 0, new ArrayList<>(), generation);
         } catch (RuntimeException failure) {
             inFlight = false;
             setStatus("Aktif · frame gagal dibaca. Scan akan dicoba lagi.");
         }
     }
 
-    private List<Bitmap> cropChat(Image image) {
+    private List<AndroidOcrPipeline.BandPasses> cropChat(Image image) {
         Image.Plane plane = image.getPlanes()[0];
         int paddedWidth = plane.getRowStride() / plane.getPixelStride();
         Bitmap frame = Bitmap.createBitmap(paddedWidth, image.getHeight(), Bitmap.Config.ARGB_8888);
-        List<Bitmap> crops = new ArrayList<>(2);
+        List<AndroidOcrPipeline.BandPasses> bands = new ArrayList<>(2);
         try {
             frame.copyPixelsFromBuffer(plane.getBuffer());
-            if (region != 2) crops.add(chatBand(frame, image.getWidth(), image.getHeight(), true));
-            if (region != 1) crops.add(chatBand(frame, image.getWidth(), image.getHeight(), false));
-            return crops;
+            if (region != 2) bands.add(AndroidOcrPipeline.prepareBandPasses(frame, image.getWidth(), image.getHeight(), true));
+            if (region != 1) bands.add(AndroidOcrPipeline.prepareBandPasses(frame, image.getWidth(), image.getHeight(), false));
+            return bands;
         } catch (RuntimeException problem) {
-            for (Bitmap crop : crops) crop.recycle();
+            recycleBands(bands, 0);
             throw problem;
         } finally {
             frame.recycle();
         }
     }
 
-    private Bitmap chatBand(Bitmap frame, int width, int height, boolean top) {
-        int y = top ? 0 : (int) (height * 0.50);
-        int bottom = top ? (int) (height * 0.49) : (int) (height * 0.96);
-        int cropWidth = Math.max(1, (int) (width * 0.59));
-        int cropHeight = Math.max(1, bottom - y);
-        Bitmap crop = Bitmap.createBitmap(frame, 0, y, cropWidth, cropHeight);
-        if (crop.getWidth() >= 760) return crop;
-        Bitmap scaled = Bitmap.createScaledBitmap(crop, cropWidth * 2, cropHeight * 2, true);
-        if (scaled != crop) crop.recycle();
-        return scaled;
+    private static void recycleBands(List<AndroidOcrPipeline.BandPasses> bands, int startIndex) {
+        for (int i = startIndex; i < bands.size(); i++) {
+            bands.get(i).recycle();
+        }
     }
 
-    private void recognize(List<Bitmap> crops, int index, List<String> lines, int frameGeneration) {
+    private void recognizeBand(List<AndroidOcrPipeline.BandPasses> bands, int index, List<String> lines, int frameGeneration) {
         if (!active || frameGeneration != generation || !isVisible) {
-            for (int i = index; i < crops.size(); i++) crops.get(i).recycle();
+            recycleBands(bands, index);
             inFlight = false;
             return;
         }
-        if (index == crops.size()) {
+        if (index == bands.size()) {
             inFlight = false;
             onRecognized(lines);
             return;
         }
 
-        Bitmap bitmap = crops.get(index);
+        AndroidOcrPipeline.BandPasses band = bands.get(index);
         try {
-            recognizer.process(InputImage.fromBitmap(bitmap, 0)).addOnCompleteListener(command -> {
+            recognizer.process(InputImage.fromBitmap(band.cleanPass, 0)).addOnCompleteListener(command -> {
                 if (!worker.post(command)) command.run();
-            }, task -> {
-                bitmap.recycle();
-                if (!task.isSuccessful()) {
-                    for (int i = index + 1; i < crops.size(); i++) crops.get(i).recycle();
+            }, task1 -> {
+                if (!band.cleanPass.isRecycled()) band.cleanPass.recycle();
+                if (!active || frameGeneration != generation || !isVisible) {
+                    recycleBands(bands, index);
                     inFlight = false;
-                    if (active) setStatus("Aktif · OCR gagal. Scan akan dicoba lagi.");
                     return;
                 }
-                if (!lines.isEmpty()) lines.add("");
-                lines.addAll(Arrays.asList(task.getResult().getText().split("\\r?\\n")));
-                recognize(crops, index + 1, lines, frameGeneration);
+                List<OcrTextCore.PositionedLine> pass1 = task1.isSuccessful()
+                    ? AndroidOcrPipeline.extractPositionedLines(task1.getResult(), "p1", band.scale, band.pad, band.rawCropWidth)
+                    : null;
+
+                try {
+                    recognizer.process(InputImage.fromBitmap(band.isolatedPass, 0)).addOnCompleteListener(command -> {
+                        if (!worker.post(command)) command.run();
+                    }, task2 -> {
+                        if (!band.isolatedPass.isRecycled()) band.isolatedPass.recycle();
+                        if (!active || frameGeneration != generation || !isVisible) {
+                            recycleBands(bands, index + 1);
+                            inFlight = false;
+                            return;
+                        }
+                        List<OcrTextCore.PositionedLine> pass2 = task2.isSuccessful()
+                            ? AndroidOcrPipeline.extractPositionedLines(task2.getResult(), "p2", band.scale, band.pad, band.rawCropWidth)
+                            : null;
+                        if (pass1 == null && pass2 == null) {
+                            recycleBands(bands, index + 1);
+                            inFlight = false;
+                            if (active) setStatus("Aktif · OCR gagal. Scan akan dicoba lagi.");
+                            return;
+                        }
+                        List<OcrTextCore.PositionedLine> merged = OcrTextCore.mergePasses(pass1, pass2);
+                        List<String> bandLines = OcrTextCore.toLineTexts(merged);
+                        if (!bandLines.isEmpty()) {
+                            if (!lines.isEmpty()) lines.add("");
+                            lines.addAll(bandLines);
+                        }
+                        recognizeBand(bands, index + 1, lines, frameGeneration);
+                    });
+                } catch (RuntimeException failure) {
+                    recycleBands(bands, index);
+                    inFlight = false;
+                    if (active) setStatus("Aktif · OCR gagal. Scan akan dicoba lagi.");
+                }
             });
         } catch (RuntimeException failure) {
-            for (int i = index; i < crops.size(); i++) crops.get(i).recycle();
+            recycleBands(bands, index);
             inFlight = false;
             if (active) setStatus("Aktif · OCR gagal. Scan akan dicoba lagi.");
         }

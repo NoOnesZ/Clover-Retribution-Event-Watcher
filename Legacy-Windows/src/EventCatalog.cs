@@ -512,6 +512,34 @@ namespace RoMulti
                     new[] { "craftsman" }
                 }
             },
+            new EventRule
+            {
+                Id = "vampire_castle",
+                DisplayName = "Vampire Castle / Lord Lucius",
+                Category = "Castle Event (Ignored)",
+                Hint = "Stronger vampires, Elite vampire, Shadow deepens, Vampire Lord Lucius",
+                EmbedColor = 0x78716C,
+                DefaultLevel = EventAlertLevel.Ignore,
+                TokenGroups = new[]
+                {
+                    new[] { "stronger", "vampires" },
+                    new[] { "stronger", "vampire" },
+                    new[] { "seen", "around", "castle" },
+                    new[] { "around", "castle" },
+                    new[] { "elite", "vampires" },
+                    new[] { "elite", "vampire" },
+                    new[] { "shadow", "deepens" },
+                    new[] { "vampire", "lord" },
+                    new[] { "lord", "lucius" },
+                    new[] { "lucius", "awakens" },
+                    new[] { "lucius", "falls" },
+                    new[] { "ancient", "darkness" },
+                    new[] { "dark", "reign" },
+                    new[] { "vampires" },
+                    new[] { "vampire" },
+                    new[] { "lucius" }
+                }
+            },
 
             // --- Catch-All for any unrecognized [Event] broadcast ---
             new EventRule
@@ -534,9 +562,9 @@ namespace RoMulti
 
         private static readonly Regex NonAlphaNumRegex = new Regex(@"[^a-z0-9\s]", RegexOptions.Compiled);
         private static readonly Regex MultiSpaceRegex = new Regex(@"\s+", RegexOptions.Compiled);
-        private static readonly Regex EventTagRegex = new Regex(@"(^|\s)[\[\(\.:',;\|]?\s*(event|leak)(\s*[\]\)\|':o0]|(?=\s+[A-Za-z]))", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        private static readonly Regex EventTagRegex = new Regex(@"(^|\s)(?:[\[\(\.:',;\|]\s*(?:[ectfk][vw]e(?:nt|ni|nf|nl|n7|m|rn)|l[e3][a4o]k|leek)|(?:e[vw]e(?:nt|ni|nf|nl|n7|m|rn)|l[e3][a4o]k|leek))([o0l]?\s*[\]\)\|':]|[o0l](?=\s)|(?=\s+[A-Za-z]))", RegexOptions.IgnoreCase | RegexOptions.Compiled);
         private static readonly Regex NonEventPrefixRegex = new Regex(@"^\s*[\[\(\.:',;\|]?\s*(tips?|system|clover\s+system)(\s*[\]\)\|':]|(?=\s+[A-Za-z]))", RegexOptions.IgnoreCase | RegexOptions.Compiled);
-        private static readonly Regex AnyChatTagStartRegex = new Regex(@"^\s*[\[\(\.:',;\|]?\s*(event|leak|tips?|system|clover\s+system|server|global)(\s*[\]\)\|':o0]|(?=\s+[A-Za-z]))", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        private static readonly Regex AnyChatTagStartRegex = new Regex(@"^\s*(?:[\[\(\.:',;\|]\s*(?:[ectfk][vw]e(?:nt|ni|nf|nl|n7|m|rn)|l[e3][a4o]k|leek|tips?|system|clover\s+system|server|global)|(?:e[vw]e(?:nt|ni|nf|nl|n7|m|rn)|l[e3][a4o]k|leek|tips?|system|clover\s+system|server|global))([o0l]?\s*[\]\)\|':]|[o0l](?=\s)|(?=\s+[A-Za-z]))", RegexOptions.IgnoreCase | RegexOptions.Compiled);
         private static readonly Regex InlineSecondTagRegex = new Regex(@"\s[\[\(\.:',;\|]\s*(event[o0]?|leak|tips?|system|clover\s+system)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
         private static readonly Regex PlayerChatPrefixRegex = new Regex(@"^\s*(\[[^\]]+\]\s*)?[A-Za-z0-9_]{2,24}\s*:\s+\S", RegexOptions.Compiled);
         private static readonly Regex HotbarSlotGluedRegex = new Regex(@"(^|\s)[1-9][A-Z][a-z]{2,}", RegexOptions.Compiled);
@@ -551,7 +579,8 @@ namespace RoMulti
             "open the map", "semi colon", "open the menu", "grimoire equipped", "cast spells",
             "level up your magic", "gain spells",
             "unsheathe", "equipped weapon", "open the journal", "drop rates",
-            "bring out your grimoire", "entered a safezone", "server initialized", "joined the experience"
+            "bring out your grimoire", "entered a safezone", "server initialized", "joined the experience",
+            "turn shiftlock", "left control key"
         };
 
         // Known HUD / hotbar / chat chrome markers that must NEVER attach to event text.
@@ -1184,8 +1213,8 @@ namespace RoMulti
         private static bool NearOcrWord(string first, string second)
         {
             if (Math.Min(first.Length, second.Length) < 4) return false;
-            string a = first.Replace("rn", "m");
-            string b = second.Replace("rn", "m");
+            string a = OcrSkeleton(first);
+            string b = OcrSkeleton(second);
             if (Math.Abs(a.Length - b.Length) > 1) return false;
             int i = 0;
             int j = 0;
@@ -1203,6 +1232,23 @@ namespace RoMulti
                 if (b.Length >= a.Length) j++;
             }
             return edits + a.Length - i + b.Length - j <= 1;
+        }
+
+        private static string OcrSkeleton(string word)
+        {
+            string s = word.Replace("rn", "m").Replace("vv", "w");
+            var sb = new StringBuilder(s.Length);
+            for (int i = 0; i < s.Length; i++)
+            {
+                char c = s[i];
+                if (c == '0') sb.Append('o');
+                else if (c == '1') sb.Append('l');
+                else if (c == '3') sb.Append('e');
+                else if (c == '4') sb.Append('a');
+                else if (c == '5') sb.Append('s');
+                else sb.Append(c);
+            }
+            return sb.ToString();
         }
     }
 }

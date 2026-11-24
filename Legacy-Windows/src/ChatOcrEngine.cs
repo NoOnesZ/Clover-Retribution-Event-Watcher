@@ -361,6 +361,7 @@ namespace RoMulti
             public double CenterY;
             public double MinX;
             public double MaxX;
+            public double LineHeight;
             public double PreviewTopY;
             public double PreviewBottomY;
             public string Text;
@@ -376,36 +377,65 @@ namespace RoMulti
             return merged;
         }
 
+        internal static int ComputeAdaptiveScale(int cropWidth, int cropHeight, int pad)
+        {
+            if (cropWidth <= 0 || cropHeight <= 0) return 3;
+            int desired = (cropWidth < 340 || cropHeight < 170) ? 4 : 3;
+            int maxEdge = Math.Max(cropWidth, cropHeight);
+            while (desired > 2 && (maxEdge * desired) + (pad * 2) > 2600)
+                desired--;
+            return desired;
+        }
+
+        private static bool HasAnyEventOrPriorityLine(List<PositionedOcrLine> lines)
+        {
+            for (int i = 0; i < lines.Count; i++)
+            {
+                string t = lines[i].Text;
+                if (string.IsNullOrWhiteSpace(t)) continue;
+                if (t.IndexOf("[Event", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    t.IndexOf("[Even", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    t.IndexOf("[Leak", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    t.IndexOf("[Leek", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    t.IndexOf("Something feels", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    t.IndexOf("strange energy", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    t.IndexOf("mysterious energy", StringComparison.OrdinalIgnoreCase) >= 0)
+                    return true;
+            }
+            return false;
+        }
+
         private static async Task<List<PositionedOcrLine>> RecognizePositionedLinesAsync(Bitmap rawCrop, int originY, int previewOffsetY, string cropTag)
         {
             var engine = GetEngine();
             var positioned = new List<PositionedOcrLine>();
             if (engine == null || rawCrop == null) return positioned;
 
-            const int scale = 3;
             const int pad = 24;
+            int scale = ComputeAdaptiveScale(rawCrop.Width, rawCrop.Height, pad);
 
-            // Pass 1: Pure high-quality color upscale (best when dark translucent chat box is active)
+            // Pass 1: Adaptive high-quality color upscale + gentle sharpen (best on dark chat boxes & low-res fonts)
             using (var pass1 = UpscaleColorClean(rawCrop, scale: scale, pad: pad))
             {
                 var lines1 = await RunWinRtOcrPositionedAsync(engine, pass1, cropTag + ":p1", scale, pad, originY, previewOffsetY, rawCrop.Width);
                 positioned.AddRange(lines1);
             }
 
-            // Pass 2: Stroke-aware local-contrast isolation (isolates outlined Roblox chat text while wiping
-            // solid orange walls, neon purple floors, and bright white stairs to pure white!)
+            // Pass 2: Stroke-aware local-contrast isolation (isolates outlined Roblox chat text, including blurry low-res
+            // gray outlines, while wiping solid orange walls, neon purple floors, and bright white stairs to pure white!)
             using (var pass2 = IsolateOutlinedChatText(rawCrop, scale: scale, pad: pad))
             {
                 var lines2 = await RunWinRtOcrPositionedAsync(engine, pass2, cropTag + ":p2", scale, pad, originY, previewOffsetY, rawCrop.Width);
                 MergePositionedLines(positioned, lines2);
             }
 
-            // Pass 3 (rare fallback): only if Pass 1+2 read 0 lines (e.g. un-outlined colored text over bright neutral sky)
-            if (positioned.Count == 0)
+            // Pass 3 (low-res / bright-sky colored fallback): run when Pass 1+2 read 0 lines, OR on very compact low-res
+            // windows when no event/rift line was recovered yet (only replaces a Y-band if OCR quality is strictly higher).
+            if (positioned.Count == 0 || (scale >= 4 && !HasAnyEventOrPriorityLine(positioned)))
             {
-                using (var pass3 = PreprocessBitmap(rawCrop, scale: 3, pad: pad, mode: PreprocessMode.ColoredEventText))
+                using (var pass3 = PreprocessBitmap(rawCrop, scale: scale, pad: pad, mode: PreprocessMode.ColoredEventText))
                 {
-                    var lines3 = await RunWinRtOcrPositionedAsync(engine, pass3, cropTag + ":p3", 3, pad, originY, previewOffsetY, rawCrop.Width);
+                    var lines3 = await RunWinRtOcrPositionedAsync(engine, pass3, cropTag + ":p3", scale, pad, originY, previewOffsetY, rawCrop.Width);
                     MergePositionedLines(positioned, lines3);
                 }
             }
@@ -424,7 +454,8 @@ namespace RoMulti
         {
             foreach (var inc in incoming)
             {
-                // Merge ONLY across different passes/crops at the exact same original vertical Y-band (~8px)
+                // Merge ONLY across different passes/crops at the exact same original vertical Y-band
+                // (tighter on low-res fonts so closely stacked lines never collapse into one!)
                 // and overlapping horizontal X-span. Keeps separate physical lines of identical events intact!
                 int matchIdx = -1;
                 double bestYDiff = double.MaxValue;
@@ -433,8 +464,10 @@ namespace RoMulti
                     var ex = target[i];
                     if (ex.SourceTag == inc.SourceTag) continue;
 
+                    double lineH = Math.Max(ex.LineHeight, inc.LineHeight);
+                    double yTol = lineH > 0 ? Math.Min(8.5, Math.Max(4.5, lineH * 0.55)) : 8.5;
                     double yDiff = Math.Abs(ex.CenterY - inc.CenterY);
-                    if (yDiff > 8.5) continue;
+                    if (yDiff > yTol) continue;
 
                     bool xOverlap = (ex.MinX <= inc.MaxX + 14.0) && (ex.MaxX >= inc.MinX - 14.0);
                     if (!xOverlap) continue;
@@ -509,11 +542,13 @@ namespace RoMulti
 
                 if (hasInnerPunct || (hasDigit && hasLetter) || upperInsideWord >= 2)
                     score -= 10; // Garbled soup like "seen!smnethinp", "2Shccp", "JESeiyeNEvents"
-                else if (trimmed.Length == 1 && trimmed != "a" && trimmed != "A" && trimmed != "I" && trimmed != "R" && trimmed != "M")
+                else if (trimmed.Length == 1 && trimmed != "a" && trimmed != "A" && trimmed != "I" && trimmed != "R" && trimmed != "M" && !(trimmed[0] >= '1' && trimmed[0] <= '7'))
                     score -= 4;  // Stray single-letter noise like "h", "n", "o"
                 else if (trimmed.Length >= 3 && hasLetter && !hasDigit)
                     score += 3;
             }
+            if (IsExplicitChatTagOrPriority(text))
+                score += 6;
             return score;
         }
 
@@ -521,12 +556,17 @@ namespace RoMulti
         {
             if (string.IsNullOrWhiteSpace(text)) return false;
             return text.IndexOf("[Event", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   text.IndexOf("[Even", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   text.IndexOf("Event]", StringComparison.OrdinalIgnoreCase) >= 0 ||
                    text.IndexOf("[Leak", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   text.IndexOf("[Leek", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   text.IndexOf("Leak]", StringComparison.OrdinalIgnoreCase) >= 0 ||
                    text.IndexOf("[Tips", StringComparison.OrdinalIgnoreCase) >= 0 ||
                    text.IndexOf("[System", StringComparison.OrdinalIgnoreCase) >= 0 ||
                    text.IndexOf("[Clover", StringComparison.OrdinalIgnoreCase) >= 0 ||
                    text.IndexOf("Something feels", StringComparison.OrdinalIgnoreCase) >= 0 ||
                    text.IndexOf("strange energy", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   text.IndexOf("mysterious energy", StringComparison.OrdinalIgnoreCase) >= 0 ||
                    text.IndexOf("unlock chat", StringComparison.OrdinalIgnoreCase) >= 0 ||
                    text.IndexOf("to chat click", StringComparison.OrdinalIgnoreCase) >= 0;
         }
@@ -535,15 +575,84 @@ namespace RoMulti
         {
             int dstW = (src.Width * scale) + (pad * 2);
             int dstH = (src.Height * scale) + (pad * 2);
-            var dst = new Bitmap(dstW, dstH, PixelFormat.Format32bppArgb);
-            using (var g = Graphics.FromImage(dst))
+            var work = new Bitmap(src.Width, src.Height, PixelFormat.Format32bppArgb);
+            try
             {
-                g.Clear(Color.FromArgb(28, 28, 34));
-                g.InterpolationMode = InterpolationMode.HighQualityBicubic;
-                g.PixelOffsetMode = PixelOffsetMode.HighQuality;
-                g.DrawImage(src, pad, pad, src.Width * scale, src.Height * scale);
+                using (var gw = Graphics.FromImage(work))
+                {
+                    gw.DrawImage(src, 0, 0, src.Width, src.Height);
+                }
+                // Sharpen at native pixel resolution BEFORE upscaling: restores 1px low-res
+                // font strokes cleanly without amplifying bicubic ringing (and runs ~10x faster).
+                SharpenBitmapInPlace(work, scale >= 4 ? 0.24f : 0.16f);
+
+                var dst = new Bitmap(dstW, dstH, PixelFormat.Format32bppArgb);
+                using (var g = Graphics.FromImage(dst))
+                {
+                    g.Clear(Color.FromArgb(28, 28, 34));
+                    g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                    g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                    g.DrawImage(work, pad, pad, src.Width * scale, src.Height * scale);
+                }
+                return dst;
             }
-            return dst;
+            finally
+            {
+                work.Dispose();
+            }
+        }
+
+        private static void SharpenBitmapInPlace(Bitmap bmp, float amount)
+        {
+            int w = bmp.Width;
+            int h = bmp.Height;
+            if (w < 3 || h < 3 || amount <= 0.01f) return;
+
+            var rect = new Rectangle(0, 0, w, h);
+            BitmapData data = bmp.LockBits(rect, ImageLockMode.ReadWrite, PixelFormat.Format32bppArgb);
+            try
+            {
+                int stride = data.Stride;
+                int totalBytes = Math.Abs(stride) * h;
+                byte[] src = new byte[totalBytes];
+                byte[] dst = new byte[totalBytes];
+                Marshal.Copy(data.Scan0, src, 0, totalBytes);
+                System.Buffer.BlockCopy(src, 0, dst, 0, totalBytes);
+
+                float centerW = 1.0f + (4.0f * amount);
+                for (int y = 1; y < h - 1; y++)
+                {
+                    int row = y * stride;
+                    int up = (y - 1) * stride;
+                    int dn = (y + 1) * stride;
+                    for (int x = 1; x < w - 1; x++)
+                    {
+                        int off = x * 4;
+                        int idx = row + off;
+                        int idxU = up + off;
+                        int idxD = dn + off;
+                        int idxL = idx - 4;
+                        int idxR = idx + 4;
+
+                        for (int ch = 0; ch < 3; ch++)
+                        {
+                            float val = src[idx + ch] * centerW
+                                - (src[idxU + ch] + src[idxD + ch] + src[idxL + ch] + src[idxR + ch]) * amount;
+                            int iv = (int)Math.Round(val);
+                            if (iv < 0) iv = 0;
+                            else if (iv > 255) iv = 255;
+                            dst[idx + ch] = (byte)iv;
+                        }
+                        dst[idx + 3] = 255;
+                    }
+                }
+
+                Marshal.Copy(dst, 0, data.Scan0, totalBytes);
+            }
+            finally
+            {
+                bmp.UnlockBits(data);
+            }
         }
 
         public static Bitmap CropTopLeftChat(Bitmap fullBmp)
@@ -909,16 +1018,27 @@ namespace RoMulti
                         }
 
                         int outVal = 255;
-                        // Case A: Outlined Roblox chat text (bright/colored ink bordering a dark 1px TextStroke)
+                        int peak = pM > pL ? pM : pL;
+                        int diffL = pL - minL;
+                        int diffM = pM - minL;
+                        // Case A1: Crisp dark 1px TextStroke outline (normal/medium res)
                         // Wipes uniform orange walls, neon purple floors, and bright white stairs cleanly to white!
-                        if (minL <= 55)
+                        if (minL <= 56)
                         {
-                            int peak = pM > pL ? pM : pL;
-                            int diffL = pL - minL;
-                            int diffM = pM - minL;
-                            if (diffL >= 34 || (pM >= 78 && diffM >= 38))
+                            if (diffL >= 32 || (pM >= 76 && diffM >= 36))
                             {
-                                int strength = (int)((peak - minL - 26) * 3.1);
+                                int strength = (int)((peak - minL - 24) * 3.15);
+                                if (strength < 0) strength = 0;
+                                if (strength > 255) strength = 255;
+                                outVal = 255 - strength;
+                            }
+                        }
+                        else if (minL <= 74)
+                        {
+                            // Case A2: Low-resolution anti-aliased gray TextStroke bordering bright/colored strokes
+                            if (diffL >= 42 || (pM >= 92 && diffM >= 46 && pS >= 34))
+                            {
+                                int strength = (int)((peak - minL - 30) * 3.0);
                                 if (strength < 0) strength = 0;
                                 if (strength > 255) strength = 255;
                                 outVal = 255 - strength;
@@ -926,9 +1046,9 @@ namespace RoMulti
                         }
                         // Case B: Saturated colored event text (e.g. gold Spirit Rift / purple Devil Rift)
                         // directly over low-saturation bright neutral sky/sand (never matches uniform colored walls!)
-                        if (outVal > 60 && pS >= 52 && minS <= 28 && (pS - minS) >= 40)
+                        if (outVal > 60 && pS >= 48 && minS <= 30 && (pS - minS) >= 36)
                         {
-                            int strength = (int)((pS - minS - 32) * 2.8);
+                            int strength = (int)((pS - minS - 28) * 2.85);
                             if (strength > 255) strength = 255;
                             int cand = 255 - strength;
                             if (cand < outVal) outVal = cand;
@@ -1014,18 +1134,20 @@ namespace RoMulti
                             double centerY = originY;
                             double minX = 0;
                             double maxX = 0;
+                            double lineHeight = 14.0;
                             double previewTopY = previewOffsetY;
                             double previewBottomY = previewOffsetY + 14;
 
                             if (line.Words != null && line.Words.Count > 0)
                             {
                                 // Sort words left-to-right and slice off any distant right-side HUD element
-                                // (like "4900 $", "Level 83", "...") separated by a wide horizontal gap (> 36px orig).
+                                // (like "4900 $", "Level 83", "...") separated by a wide horizontal gap.
                                 var sortedWords = new List<OcrWord>(line.Words.Count);
                                 foreach (var w in line.Words)
                                     sortedWords.Add(w);
                                 sortedWords.Sort((a, b) => a.BoundingRect.X.CompareTo(b.BoundingRect.X));
 
+                                double maxWordGap = Math.Max(36.0, rawCropWidth * 0.09);
                                 var keptWords = new List<OcrWord>();
                                 double prevRightOrig = 0;
                                 for (int wi = 0; wi < sortedWords.Count; wi++)
@@ -1033,7 +1155,7 @@ namespace RoMulti
                                     var w = sortedWords[wi];
                                     double leftOrig = (w.BoundingRect.X - pad) / (double)scale;
                                     double rightOrig = (w.BoundingRect.X + w.BoundingRect.Width - pad) / (double)scale;
-                                    if (wi > 0 && (leftOrig - prevRightOrig) > 36.0)
+                                    if (wi > 0 && (leftOrig - prevRightOrig) > maxWordGap)
                                         break;
                                     keptWords.Add(w);
                                     prevRightOrig = rightOrig;
@@ -1042,6 +1164,7 @@ namespace RoMulti
                                 if (keptWords.Count == 0) continue;
 
                                 double sumY = 0;
+                                double sumH = 0;
                                 minX = double.MaxValue;
                                 maxX = double.MinValue;
                                 double minScaledY = double.MaxValue;
@@ -1050,6 +1173,7 @@ namespace RoMulti
                                 foreach (var w in keptWords)
                                 {
                                     sumY += w.BoundingRect.Y + (w.BoundingRect.Height * 0.5);
+                                    sumH += w.BoundingRect.Height;
                                     if (w.BoundingRect.X < minX) minX = w.BoundingRect.X;
                                     double rx = w.BoundingRect.X + w.BoundingRect.Width;
                                     if (rx > maxX) maxX = rx;
@@ -1061,6 +1185,7 @@ namespace RoMulti
 
                                 double avgScaledY = sumY / keptWords.Count;
                                 centerY = originY + ((avgScaledY - pad) / (double)scale);
+                                lineHeight = Math.Max(6.0, (sumH / keptWords.Count) / (double)scale);
                                 minX = (minX - pad) / (double)scale;
                                 maxX = (maxX - pad) / (double)scale;
                                 previewTopY = previewOffsetY + ((minScaledY - pad) / (double)scale);
@@ -1082,6 +1207,7 @@ namespace RoMulti
                                     CenterY = centerY,
                                     MinX = minX,
                                     MaxX = maxX,
+                                    LineHeight = lineHeight,
                                     PreviewTopY = previewTopY,
                                     PreviewBottomY = previewBottomY,
                                     Text = finalText,

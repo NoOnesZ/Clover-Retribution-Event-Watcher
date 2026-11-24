@@ -93,14 +93,25 @@ public final class DetectorSmokeRunner extends Instrumentation {
         EventMatcher.Detection rare = EventMatcher.scan(Arrays.asList("Something feels off..."), true).events.get(0);
         EventMatcher.Detection common = EventMatcher.scan(
             Arrays.asList("[Event] Mana fluttering can be heard across the grasslands."), true).events.get(0);
+        EventMatcher.Detection unknown = EventMatcher.scan(
+            Arrays.asList("[Event] A brand new eclipse descends upon the clover realm."), false).events.get(0);
         JSONObject priority = DiscordWebhook.buildEventPayload(rare, "server-demo", "<@!" + user + ">");
         JSONObject normal = DiscordWebhook.buildEventPayload(common, "server-demo", user);
         JSONObject noPing = DiscordWebhook.buildEventPayload(rare, "server-demo", "");
+        JSONObject other = DiscordWebhook.buildEventPayload(unknown, "server-demo", user);
+        JSONObject priorityEmbed = priority.getJSONArray("embeds").getJSONObject(0);
+        JSONObject normalEmbed = normal.getJSONArray("embeds").getJSONObject(0);
+        JSONObject otherEmbed = other.getJSONArray("embeds").getJSONObject(0);
         if (!priority.getString("content").equals("<@" + user + ">") ||
                 !priority.getJSONObject("allowed_mentions").getJSONArray("users").getString(0).equals(user) ||
                 priority.getJSONObject("allowed_mentions").getJSONArray("parse").length() != 0 ||
-                normal.has("content") || noPing.has("content")) {
+                normal.has("content") || noPing.has("content") || other.has("content")) {
             throw new AssertionError("Discord ping was not restricted to its configured user and priority.");
+        }
+        if (priorityEmbed.has("description") || normalEmbed.has("description") ||
+                !otherEmbed.has("description") ||
+                !otherEmbed.getString("description").contains("brand new eclipse")) {
+            throw new AssertionError("Webhook description must be omitted for registered events and shown for Other [Event] Broadcast.");
         }
         try {
             DiscordWebhook.normalizeDiscordUserId("@everyone");

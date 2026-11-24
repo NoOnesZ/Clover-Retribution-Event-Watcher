@@ -61,18 +61,22 @@ final class DiscordWebhook {
     }
 
     static JSONObject buildEventPayload(EventMatcher.Detection event, String privateServerCode, String userId) throws Exception {
-        return buildPayload(event.rule.title, event.text, event.rule.color, privateServerCode,
+        String description = event.rule.isCatchAll() ? event.text : "";
+        return buildPayload(event.rule.title, description, event.rule.color, privateServerCode,
             event.rule.priority ? userId : "");
     }
 
     static JSONObject buildPayload(String title, String message, int color, String privateServerCode, String userId) throws Exception {
-        String description = message.substring(0, Math.min(message.length(), 450));
+        String description = message == null ? "" : message.trim();
+        if (description.length() > 450) description = description.substring(0, 450);
         JSONObject embed = new JSONObject()
             .put("title", title)
-            .put("description", description)
             .put("color", color)
             .put("timestamp", Instant.now().toString())
             .put("footer", new JSONObject().put("text", "Clover Event Detector · Android"));
+        if (!description.isEmpty()) {
+            embed.put("description", description);
+        }
         String code = normalizePrivateServerCode(privateServerCode);
         if (!code.isEmpty()) {
             JSONObject field = new JSONObject().put("name", "Private server").put("value", code).put("inline", true);

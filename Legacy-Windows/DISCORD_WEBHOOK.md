@@ -55,8 +55,8 @@ Di panel kanan tab **Event Watcher & Anti-AFK**, klik baris event mana saja untu
 | Level | Perilaku di Discord | Daftar Default di RoMulti |
 |---|---|---|
 | **`PING`** | Mengirim **mention** (`@everyone` / `<@USER_ID>`) + embed + screenshot chat | **Devil Rift** (`Something feels off...`, ungu)<br>**Spirit Rift** (`strange energy feel toward kingdom`, emas) |
-| **`NORMAL`** | Mengirim embed + screenshot chat **tanpa mention/ping** | **Khamsin: The Sand Sage**, **Void Wisp**, **Spirit Wisp**, **Strange Scientist**, **Devil Rumors**, **Guarded Rift**, **Devil Assault**, **Corrupted Night**, **A Green Star**, **The Divine General**, **Prime Apex**, **Other `[Event]` Broadcast** *(Catch-All)* |
-| **`IGNORE`** | Tidak dikirim ke Discord | **Mana Wisp**, **Terra: The Bandit Lord**, **Grasslands Warlord**, **Wolf Hunter Craftsman** |
+| **`NORMAL`** | Mengirim embed + screenshot chat **tanpa mention/ping** | **Khamsin: The Sand Sage**, **Void Wisp**, **Leak Event**, **Spirit Wisp**, **Strange Scientist**, **Guarded Rift**, **Corrupted Night**, **A Green Star**, **The Divine General**, **Prime Apex**, **1–7 Stars**, **Other `[Event]` Broadcast** *(Catch-All)* |
+| **`IGNORE`** | Tidak dikirim ke Discord | **Mana Wisp**, **Terra: The Bandit Lord**, **Grasslands Warlord**, **Wolf Hunter Craftsman**, **Devil Rumors**, **Devil Assault (Giant Demon)**, **Vampire Castle / Lord Lucius** |
 
 > [!TIP]
 > Aturan **Other `[Event]` Broadcast (Catch-All)** menangkap semua baris berawalan `[Event]` yang kalimatnya belum terdaftar, sehingga event baru dari update game tidak akan pernah terlewat.
@@ -68,7 +68,7 @@ Di panel kanan tab **Event Watcher & Anti-AFK**, klik baris event mana saja untu
 Setiap kali event terdeteksi pada salah satu akun `AFK SAVER`, RoMulti mengirim **Rich Embed** berisi:
 
 - **Judul & Warna Embed:** sesuai jenis event (mis. Ungu untuk *Devil Rift*, Emas untuk *Spirit Rift*).
-- **Chat Broadcast (OCR):** teks pesan chat persis yang terbaca oleh Windows WinRT OCR.
+- **Chat Broadcast (OCR):** hanya ditampilkan di deskripsi embed untuk event yang belum terdaftar (**Other `[Event]` Broadcast**); event terdaftar tampil ringkas tanpa teks OCR mentah.
 - **Scout Account:** label akun & PID tempat event muncul (mis. `Scout 1 (PID 32252)`).
 - **Server (`PlaceId` / `JobId`):** dibaca otomatis dari log aktif Roblox.
 - **Quick Join URI:** link `roblox://experiences/start?placeId=...&gameInstanceId=...` untuk langsung melompat ke server tersebut.

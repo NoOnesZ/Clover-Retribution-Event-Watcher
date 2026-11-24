@@ -8,6 +8,12 @@ final class CloverRules {
         "devil_assault", "Devil Assault (Giant Demon)", 0xEF4444, false, false,
         "giant devil|giant demon|devil assault|toward capital");
 
+    static final EventMatcher.Rule VAMPIRE_CASTLE = new EventMatcher.Rule(
+        "vampire_castle", "Vampire Castle / Lord Lucius", 0x78716C, false, false,
+        "stronger vampires|stronger vampire|seen around castle|around castle|elite vampires|elite vampire|"
+            + "shadow deepens|vampire lord|lord lucius|lucius awakens|lucius falls|ancient darkness|dark reign|"
+            + "vampire|vampires|lucius");
+
     static final String[] STAR_COUNTS = {"one", "two", "three", "four", "five", "six", "seven"};
     static final EventMatcher.Rule[] STAR_EVENTS = createStarEvents();
 
@@ -41,6 +47,7 @@ final class CloverRules {
         new EventMatcher.Rule("guarded_rift", "Guarded Rift", 0x8B5CF6, true, false,
             "guarded rift|shadow hand|shadowhand|rift shrouded|sinister mana|stands watch guarding|rift incursion"),
         GIANT_DEMON,
+        VAMPIRE_CASTLE,
         new EventMatcher.Rule("corrupted_night", "Corrupted Night", 0x7C3AED, true, false,
             "air grows heavy|grows heavy|darkness takes hold|consumed corruption|creature corruption|corrupted night"),
         new EventMatcher.Rule("green_star", "A Green Star (Oath Ring)", 0x22C55E, true, false,
@@ -79,6 +86,7 @@ final class CloverRules {
         "top of your screen", "open the map", "semi colon", "open the menu",
         "grimoire equipped", "cast spells", "level up your magic", "gain spells",
         "unsheathe", "equipped weapon", "open the journal", "drop rates",
-        "bring out your grimoire", "entered a safezone", "server initialized", "joined the experience"
+        "bring out your grimoire", "entered a safezone", "server initialized", "joined the experience",
+        "turn shiftlock", "left control key"
     };
 }

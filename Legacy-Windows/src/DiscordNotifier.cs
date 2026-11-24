@@ -541,13 +541,17 @@ namespace RoMulti
             var embed = new Dictionary<string, object>
             {
                 { "title", (isPing ? "[PRIORITY] " : "") + ev.Rule.DisplayName },
-                { "description", Truncate(ev.RawLine, 300) + "\n\n" + ev.Rule.Category + " · " + ev.Rule.Hint },
                 { "color", ev.Rule.EmbedColor },
                 { "timestamp", DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ") },
                 { "footer", new Dictionary<string, object> { { "text", string.Format(
                     "{0} · PID {1} · {2} · Clover Event Detector", Truncate(inst.Label, 100), inst.ProcessId,
                     isPing ? "Priority" : "Normal") } } }
             };
+
+            if (ev.Rule.IsCatchAll && !string.IsNullOrWhiteSpace(ev.RawLine))
+            {
+                embed["description"] = Truncate(ev.RawLine, 300);
+            }
 
             if (fields.Count > 0) embed["fields"] = fields;
             if (attachImage)

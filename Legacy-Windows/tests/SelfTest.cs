@@ -38,7 +38,7 @@ namespace RoMulti
 
             if (!VerifyWatcherSessionTracking() || !VerifyScheduledFocus() || !VerifyMainOnlyAntiAfk() ||
                 !VerifyFrozenCapture() || !VerifyCatalogTypos() || !VerifyOcrReplay() ||
-                !VerifyStarBroadcasts() || !VerifyCompactDiscordPayload())
+                !VerifyStarBroadcasts() || !VerifyVampireCastleIgnored() || !VerifyCompactDiscordPayload())
                 return 1;
 
             // 1. Roblox exe discovery
@@ -665,6 +665,51 @@ namespace RoMulti
                 }
             }
 
+            // 6g. Low-resolution compact chat OCR test (small 300x110 crop with outlined 7.5pt fonts over noisy bg)
+            using (var lowRes = new Bitmap(300, 110, PixelFormat.Format32bppArgb))
+            {
+                using (var g = Graphics.FromImage(lowRes))
+                {
+                    g.Clear(Color.FromArgb(46, 56, 72));
+                    using (var f = new Font("Segoe UI", 8.0f, FontStyle.Bold))
+                    using (var outline = new SolidBrush(Color.FromArgb(20, 20, 24)))
+                    using (var purple = new SolidBrush(Color.FromArgb(205, 115, 255)))
+                    using (var red = new SolidBrush(Color.FromArgb(255, 85, 85)))
+                    {
+                        string[] rows = new[]
+                        {
+                            "[Event] The air grows heavy, darkness takes hold.",
+                            "[Leak] Something is leaking in the grasslands...",
+                            "[Event] Stronger vampires can now be seen around the castle.",
+                            "[Event] A shadow deepens as Vampire Lord Lucius awakens."
+                        };
+                        Brush[] brushes = new Brush[] { purple, red, purple, purple };
+                        for (int r = 0; r < rows.Length; r++)
+                        {
+                            float y = 8 + r * 23;
+                            g.DrawString(rows[r], f, outline, 7, y);
+                            g.DrawString(rows[r], f, outline, 9, y);
+                            g.DrawString(rows[r], f, outline, 8, y - 1);
+                            g.DrawString(rows[r], f, outline, 8, y + 1);
+                            g.DrawString(rows[r], f, brushes[r], 8, y);
+                        }
+                    }
+                }
+                var lowLines = ChatOcrEngine.RecognizeChatLinesAsync(lowRes).GetAwaiter().GetResult();
+                var lowMatches = EventCatalog.MatchAllOccurrences(lowLines, defaultCfg);
+                bool hasCorrupted = lowMatches.Any(m => m.Rule.Id == "corrupted_night" && m.EffectiveLevel == EventAlertLevel.Normal);
+                bool hasLeak = lowMatches.Any(m => m.Rule.Id == "leak_event" && m.EffectiveLevel == EventAlertLevel.Normal);
+                bool anyVampireActive = lowMatches.Any(m => m.Rule.Id == "vampire_castle" && m.EffectiveLevel != EventAlertLevel.Ignore);
+                bool anyLowUnknown = lowMatches.Any(m => m.Rule.Id == "unknown_event");
+                Console.WriteLine("    6g Low-res 300x110 OCR lines: " + string.Join(" | ", lowLines));
+                if (!hasCorrupted || !hasLeak || anyVampireActive || anyLowUnknown)
+                {
+                    Console.WriteLine("FAIL 6g: Low-res OCR failed (corrupted=" + hasCorrupted + ", leak=" + hasLeak + ", unk=" + anyLowUnknown + ")");
+                    return 1;
+                }
+                Console.WriteLine("    6g Low-res compact OCR (adaptive 4x + sharpen + Vampire/Lucius ignored): OK");
+            }
+
             // 7. Live Roblox log PlaceId & JobId extraction
             string logsDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Roblox", "logs");
             if (Directory.Exists(logsDir))
@@ -963,6 +1008,33 @@ namespace RoMulti
             return valid;
         }
 
+        private static bool VerifyVampireCastleIgnored()
+        {
+            var config = new RoMultiConfig();
+            var vampireChat = new[]
+            {
+                "[Event] Stronger vampires can now be seen around the castle.",
+                "[Event] The Elite of the vampires has been defeated.",
+                "[Event] The Elite of the vampires appears near the castle.",
+                "[Event] A shadow deepens across the land as Vampire Lord Lucius awakens,",
+                "bringing an ancient darkness with him.",
+                "[Event] Lucius falls, his dark reign fading into the shadows.",
+                "[Event] Lucius falls, his dark reign",
+                "[Tips] You can turn shiftlock on and off with the Left Control key."
+            };
+            var matches = EventCatalog.MatchAllOccurrences(vampireChat, config);
+            if (matches.Any(m => m.EffectiveLevel != EventAlertLevel.Ignore) ||
+                matches.Any(m => m.Rule.Id == "unknown_event") ||
+                !matches.Any(m => m.Rule.Id == "vampire_castle"))
+            {
+                Console.WriteLine("FAIL: Vampire/Lucius events must all be ignored and never leak into alerts: " +
+                    string.Join(", ", matches.Select(m => m.Rule.Id + ":" + m.EffectiveLevel)));
+                return false;
+            }
+            Console.WriteLine("[OCR] Stronger vampire, Elite vampire, Shadow deepens & Lord Lucius ignored: OK");
+            return true;
+        }
+
         private static bool VerifyCompactDiscordPayload()
         {
             const string user = "123456789012345678";
@@ -985,15 +1057,16 @@ namespace RoMulti
                 fields.Count != 2 || (string)fields.Single(field => (string)field["name"] == "Private server")["value"] != fixtureCode ||
                 !serverField.Contains(server.PlaceId) || !serverField.Contains(server.JobId) || !serverField.Contains(server.DirectJoinUri) ||
                 !footer.Contains("Demo Scout") || !footer.Contains("916") || !footer.Contains("Priority") ||
-                !((string)embed["description"]).Contains(rare.RawLine) || !embed.ContainsKey("timestamp") ||
+                embed.ContainsKey("description") || !embed.ContainsKey("timestamp") ||
+                !noServer.ContainsKey("description") || !((string)noServer["description"]).Contains(regular.RawLine) ||
                 (string)((Dictionary<string, object>)embed["image"])["url"] != "attachment://chat.png" ||
                 normal.ContainsKey("content") || noServer.ContainsKey("fields") || noServer.ContainsKey("image") ||
                 DiscordNotifier.TryNormalizePrivateServerCode("bad server", out unusedCode))
             {
-                Console.WriteLine("FAIL: Compact Discord embed lost an event detail or mentioned the wrong audience.");
+                Console.WriteLine("FAIL: Compact Discord embed lost an event detail, kept description on registered event, or omitted description on unknown_event.");
                 return false;
             }
-            Console.WriteLine("[Discord] Compact event, server code, join metadata, priority and screenshot payload: OK");
+            Console.WriteLine("[Discord] Compact event (no OCR description on registered events, description shown on Other [Event] Broadcast): OK");
             return true;
         }
 
