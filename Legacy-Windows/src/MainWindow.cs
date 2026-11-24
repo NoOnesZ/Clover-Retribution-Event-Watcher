@@ -20,6 +20,7 @@ namespace RoMulti
 {
     public sealed class MainWindow : Window
     {
+        internal const string AppVersion = "v1.4.0";
         private const int PeriodicTrimIntervalSeconds = 45;
         private const int AutomaticFocusIdleMs = 5000;
 
@@ -128,7 +129,7 @@ namespace RoMulti
         {
             _config = RoMultiConfig.Load();
 
-            Title = "RoMulti — Roblox Multi-Instance, AFK Saver & Event Watcher";
+            Title = "RoMulti " + AppVersion + " — Roblox Multi-Instance, AFK Saver & Event Watcher";
             Width = 1180;
             Height = 810;
             MinWidth = 980;
@@ -151,7 +152,7 @@ namespace RoMulti
             InitTrayIcon();
 
             string ocrLang = ChatOcrEngine.GetAvailableOcrLanguage();
-            Log("INFO", "RoMulti ready. Mode: " + (RobloxHandleEngine.IsRunningAsAdmin() ? "Administrator" : "Standard User") +
+            Log("INFO", "RoMulti Event Detector " + AppVersion + " ready. Mode: " + (RobloxHandleEngine.IsRunningAsAdmin() ? "Administrator" : "Standard User") +
                 " | WinRT OCR: " + (string.IsNullOrEmpty(ocrLang) ? "Unavailable" : ocrLang));
             Log("INFO", "Priority alerts armed: Devil Rift ('Something feels off...') & Spirit Rift ('strange energy... kingdom').");
 
@@ -262,6 +263,24 @@ namespace RoMulti
                 FontWeight = FontWeights.SemiBold,
                 Foreground = TextPrimary
             });
+
+            var versionPill = new Border
+            {
+                CornerRadius = new CornerRadius(10),
+                Padding = new Thickness(7, 2, 7, 2),
+                Margin = new Thickness(8, 0, 0, 0),
+                Background = AccentBlueBg,
+                BorderBrush = AccentBlue,
+                BorderThickness = new Thickness(1),
+                Child = new TextBlock
+                {
+                    Text = AppVersion,
+                    FontSize = 10,
+                    FontWeight = FontWeights.SemiBold,
+                    Foreground = AccentBlue
+                }
+            };
+            titleRow.Children.Add(versionPill);
 
             bool isAdmin = RobloxHandleEngine.IsRunningAsAdmin();
             var rolePill = new Border
@@ -1766,8 +1785,17 @@ namespace RoMulti
             {
                 if (m.EffectiveLevel == EventAlertLevel.Ignore) continue;
 
+                string jobId = serverInfo != null ? serverInfo.JobId : null;
+                if (_discord.IsDuplicateOnSameServerAndRecord(jobId, m.DedupeKey, scout.ProcessId, recordIfNew: false))
+                {
+                    Log("INFO", string.Format("Cross-PID same-server duplicate suppressed: {0} on {1}.",
+                        m.Rule.DisplayName, scout.Label));
+                    continue;
+                }
+
                 if (string.IsNullOrWhiteSpace(webhookUrl))
                 {
+                    _discord.IsDuplicateOnSameServerAndRecord(jobId, m.DedupeKey, scout.ProcessId, recordIfNew: true);
                     Log("OK", string.Format("[{0}] {1} on {2} (no webhook set): {3}",
                         m.EffectiveLevel.ToString().ToUpperInvariant(), m.Rule.DisplayName, scout.Label, m.RawLine));
                     if (_trayIcon != null)
@@ -1792,6 +1820,7 @@ namespace RoMulti
 
                 if (sendRes.Sent)
                 {
+                    _discord.IsDuplicateOnSameServerAndRecord(jobId, m.DedupeKey, scout.ProcessId, recordIfNew: true);
                     Log("OK", string.Format("Discord alert sent [{0}]: {1} on {2} -> {3}",
                         m.EffectiveLevel.ToString().ToUpperInvariant(), m.Rule.DisplayName, scout.Label, m.RawLine));
                     if (_trayIcon != null)

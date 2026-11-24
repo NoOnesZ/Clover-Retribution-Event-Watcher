@@ -115,23 +115,65 @@ final class EventMatcher {
     private static Rule findRule(String line, boolean tagged) {
         if (tagged && GIANT_SEAL.matcher(line).find()) return CloverRules.GIANT_DEMON;
         if (isDevilRiftFuzzyBroadcast(line, tagged)) return CloverRules.NAMED[0];
+        String[] words = line.split(" ");
+        String compact = intentSkeleton(line).replace(" ", "");
+
+        // Tier 1: Exact token-group match
         for (Rule rule : CloverRules.NAMED) {
-            if ((!tagged && !rule.priority) || !rule.matches(line)) continue;
-            if (!tagged && rule.id.equals("devil_rift") && !line.contains("feels off")) continue;
-            if (!tagged && rule.id.equals("spirit_rift") && !line.contains("kingdom")) continue;
-            if (!tagged && isPriorityWispRule(rule) && !startsPriorityWisp(line)) continue;
-            return rule;
+            if (!tagged && !allowsTaglessRule(rule, line, words, compact)) continue;
+            if (rule.matches(line)) return rule;
         }
         if (!tagged && !startsRift(line) && !startsPriorityWisp(line)) return null;
-        String[] words = line.split(" ");
-        Rule candidate = null;
+
+        // Tier 2: Unique single-word typo match (ambiguity short-circuits to null!)
+        Rule tier2Candidate = null;
+        int tier2Count = 0;
         for (Rule rule : CloverRules.NAMED) {
-            if ((!tagged && !rule.priority) || !rule.matchesTypo(words)) continue;
-            if (!tagged && isPriorityWispRule(rule) && !startsPriorityWisp(line)) continue;
-            if (candidate != null) return null;
-            candidate = rule;
+            if (!tagged && !allowsTaglessRule(rule, line, words, compact)) continue;
+            if (!rule.matchesTypo(words)) continue;
+            tier2Candidate = rule;
+            if (++tier2Count >= 2) return null;
         }
-        return candidate;
+        if (tier2Count == 1) return tier2Candidate;
+
+        // Tier 3.1: Space-glued distinctive multi-word anchor match (ambiguity short-circuits to null!)
+        Rule gluedCandidate = null;
+        int gluedCount = 0;
+        for (Rule rule : CloverRules.NAMED) {
+            if (!tagged && !allowsTaglessRule(rule, line, words, compact)) continue;
+            if (!rule.matchesGlued(compact)) continue;
+            gluedCandidate = rule;
+            if (++gluedCount >= 2) return null;
+        }
+        if (gluedCount == 1) return gluedCandidate;
+
+        // Tier 3.2: Multi-typo token-group intent match (strict uniqueness -> null if 2+ rules qualify)
+        Rule intentCandidate = null;
+        int intentCount = 0;
+        for (Rule rule : CloverRules.NAMED) {
+            if (!tagged && !allowsTaglessRule(rule, line, words, compact)) continue;
+            if (!rule.matchesIntentMultiTypo(words)) continue;
+            intentCandidate = rule;
+            if (++intentCount >= 2) return null;
+        }
+        return intentCount == 1 ? intentCandidate : null;
+    }
+
+    private static boolean allowsTaglessRule(Rule rule, String line, String[] words, String compact) {
+        if (!rule.priority) return false;
+        if (rule.id.equals("devil_rift")) return isDevilRiftFuzzyBroadcast(line, false);
+        if (rule.id.equals("spirit_rift")) {
+            if (!startsRift(line)) return false;
+            for (String w : words) {
+                if (w.equals("kingdom") || w.equals("felt") || w.equals("throughout")
+                        || w.equals("toward") || nearWord(w, "kingdom")) {
+                    return true;
+                }
+            }
+            return compact.contains("kingdom") || compact.contains("throughout");
+        }
+        if (isPriorityWispRule(rule)) return startsPriorityWisp(line);
+        return false;
     }
 
     private static boolean isPriorityWispRule(Rule rule) {
@@ -140,13 +182,20 @@ final class EventMatcher {
     }
 
     private static boolean startsPriorityWisp(String line) {
+        String compact = intentSkeleton(line).replace(" ", "");
+        if (compact.startsWith("windwisp") || compact.startsWith("awindwisp") || compact.startsWith("thewindwisp")
+                || compact.startsWith("bloodwisp") || compact.startsWith("abloodwisp") || compact.startsWith("thebloodwisp")
+                || compact.startsWith("lightwisp") || compact.startsWith("alightwisp") || compact.startsWith("thelightwisp")
+                || compact.startsWith("spiritwisp") || compact.startsWith("aspiritwisp") || compact.startsWith("thespiritwisp")) {
+            return true;
+        }
         String[] words = line.split(" ");
         int start = (words.length > 0 && (words[0].equals("a") || words[0].equals("the"))) ? 1 : 0;
         if (words.length - start < 2) return false;
-        return nearOpening(words, start, "wind", "wisp")
-            || nearOpening(words, start, "blood", "wisp")
-            || nearOpening(words, start, "light", "wisp")
-            || nearOpening(words, start, "spirit", "wisp");
+        return nearOpeningBoth(words, start, "wind", "wisp")
+            || nearOpeningBoth(words, start, "blood", "wisp")
+            || nearOpeningBoth(words, start, "light", "wisp")
+            || nearOpeningBoth(words, start, "spirit", "wisp");
     }
 
     private static boolean startsStar(String line) {
@@ -194,6 +243,8 @@ final class EventMatcher {
 
     private static boolean isDespawnOrEnd(String line) {
         if (containsAny(line, CloverRules.DESPAWN) || isCorruptedNightEnd(line)) return true;
+        String compact = intentSkeleton(line).replace(" ", "");
+        if (containsAny(compact, CloverRules.GLUED_DESPAWN_COMPOUNDS)) return true;
         String[] words = line.split(" ");
         for (String w : words) {
             if (w.length() < 5) continue;
@@ -210,17 +261,24 @@ final class EventMatcher {
     }
 
     private static boolean startsRift(String line) {
+        String compact = intentSkeleton(line).replace(" ", "");
+        if (compact.startsWith("somethingfeels") || compact.startsWith("asomethingfeels")
+                || compact.startsWith("strangeenergy") || compact.startsWith("astrangeenergy")
+                || compact.startsWith("mysteriousenergy") || compact.startsWith("amysteriousenergy")) {
+            return true;
+        }
         String[] words = line.split(" ");
-        int start = words[0].equals("a") ? 1 : 0;
+        int start = (words.length > 0 && (words[0].equals("a") || words[0].equals("the"))) ? 1 : 0;
         if (words.length - start < 2) return false;
-        return nearOpening(words, start, "something", "feels")
-            || nearOpening(words, start, "strange", "energy")
-            || nearOpening(words, start, "mysterious", "energy");
+        return nearOpeningBoth(words, start, "something", "feels")
+            || nearOpeningBoth(words, start, "strange", "energy")
+            || nearOpeningBoth(words, start, "mysterious", "energy");
     }
 
-    private static boolean nearOpening(String[] words, int start, String first, String second) {
-        return (words[start].equals(first) && nearWord(words[start + 1], second))
-            || (words[start + 1].equals(second) && nearWord(words[start], first));
+    private static boolean nearOpeningBoth(String[] words, int start, String first, String second) {
+        boolean firstOk = words[start].equals(first) || nearWord(words[start], first);
+        boolean secondOk = words[start + 1].equals(second) || nearWord(words[start + 1], second);
+        return firstOk && secondOk;
     }
 
     private static boolean endsSentence(String s) {
@@ -248,6 +306,58 @@ final class EventMatcher {
             if (++changed > 1 || !nearWord(a[i], b[i])) return false;
         }
         return true;
+    }
+
+    static boolean sameUnknownBroadcast(String first, String second) {
+        if (first == null || second == null || first.isEmpty() || second.isEmpty()) return false;
+        if (sameBroadcast(first, second)) return true;
+        String a = intentSkeleton(first.toLowerCase(Locale.ROOT)).replace(" ", "");
+        String b = intentSkeleton(second.toLowerCase(Locale.ROOT)).replace(" ", "");
+        int minLen = Math.min(a.length(), b.length());
+        int maxLen = Math.max(a.length(), b.length());
+        if (minLen < 18 || ((double) minLen / maxLen) < 0.65) return false;
+        return bigramDice(a, b) >= 0.62;
+    }
+
+    private static double bigramDice(String a, String b) {
+        if (a.length() < 2 || b.length() < 2) return 0.0;
+        java.util.HashMap<String, Integer> countsA = new java.util.HashMap<>();
+        int totalA = a.length() - 1;
+        for (int i = 0; i < totalA; i++) {
+            String bg = a.substring(i, i + 2);
+            Integer c = countsA.get(bg);
+            countsA.put(bg, c == null ? 1 : c + 1);
+        }
+        int intersection = 0;
+        int totalB = b.length() - 1;
+        for (int i = 0; i < totalB; i++) {
+            String bg = b.substring(i, i + 2);
+            Integer c = countsA.get(bg);
+            if (c != null && c > 0) {
+                intersection++;
+                countsA.put(bg, c - 1);
+            }
+        }
+        return (2.0 * intersection) / (totalA + totalB);
+    }
+
+    static String intentSkeleton(String word) {
+        if (word == null || word.isEmpty()) return "";
+        String s = word.replace("rn", "m").replace("nn", "m").replace("nu", "m")
+            .replace("vv", "w").replace("cl", "d");
+        StringBuilder sb = new StringBuilder(s.length());
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            switch (c) {
+                case '0': sb.append('o'); break;
+                case '1': sb.append('l'); break;
+                case '3': sb.append('e'); break;
+                case '4': sb.append('a'); break;
+                case '5': sb.append('s'); break;
+                default: sb.append(c); break;
+            }
+        }
+        return sb.toString();
     }
 
     private static boolean isDevilRiftFuzzyBroadcast(String line, boolean tagged) {
@@ -444,6 +554,63 @@ final class EventMatcher {
                     }
                 }
                 if (matched && anchor && approximate == 1) return true;
+            }
+            return false;
+        }
+
+        boolean matchesGlued(String compactLine) {
+            if (compactLine == null || compactLine.isEmpty()) return false;
+            for (String[] group : tokenGroups) {
+                if (group.length < 2) continue;
+                StringBuilder sb = new StringBuilder();
+                for (String token : group) sb.append(token);
+                String joined = intentSkeleton(sb.toString());
+                if (joined.length() < 8) continue;
+                if (compactLine.contains(joined)) return true;
+            }
+            return false;
+        }
+
+        boolean matchesIntentMultiTypo(String[] words) {
+            if (words == null || words.length == 0) return false;
+            String[] wordSks = new String[words.length];
+            for (int i = 0; i < words.length; i++) wordSks[i] = intentSkeleton(words[i]);
+            for (String[] group : tokenGroups) {
+                if (group.length < 2) continue;
+                int substantialTokens = 0;
+                for (String token : group) {
+                    if (intentSkeleton(token).length() >= 4) substantialTokens++;
+                }
+                if (group.length == 2 && substantialTokens < 2) continue;
+
+                boolean allMatched = true;
+                boolean strongAnchor = false;
+                for (String token : group) {
+                    String tokSk = intentSkeleton(token);
+                    int maxDist = tokSk.length() >= 8 ? 2 : (tokSk.length() >= 4 ? 1 : 0);
+                    int bestDist = Integer.MAX_VALUE;
+                    for (String wSk : wordSks) {
+                        if (wSk.equals(tokSk)) {
+                            bestDist = 0;
+                            break;
+                        }
+                        if (tokSk.length() >= 5 && wSk.length() > tokSk.length() && wSk.contains(tokSk)) {
+                            if (bestDist > 1) bestDist = 1;
+                            continue;
+                        }
+                        if (maxDist >= 1 && editDistanceAtMost(wSk, tokSk, 1)) {
+                            if (bestDist > 1) bestDist = 1;
+                        } else if (maxDist >= 2 && bestDist > 2 && editDistanceAtMost(wSk, tokSk, 2)) {
+                            bestDist = 2;
+                        }
+                    }
+                    if (bestDist > maxDist) {
+                        allMatched = false;
+                        break;
+                    }
+                    if (tokSk.length() >= 4 && bestDist <= 1) strongAnchor = true;
+                }
+                if (allMatched && (strongAnchor || group.length >= 3)) return true;
             }
             return false;
         }

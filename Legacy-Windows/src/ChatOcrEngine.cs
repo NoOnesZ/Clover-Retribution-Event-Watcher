@@ -399,7 +399,10 @@ namespace RoMulti
                     t.IndexOf("[Leek", StringComparison.OrdinalIgnoreCase) >= 0 ||
                     t.IndexOf("Something feels", StringComparison.OrdinalIgnoreCase) >= 0 ||
                     t.IndexOf("strange energy", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                    t.IndexOf("mysterious energy", StringComparison.OrdinalIgnoreCase) >= 0)
+                    t.IndexOf("mysterious energy", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    t.IndexOf("wind wisp", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    t.IndexOf("blood wisp", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    t.IndexOf("light wisp", StringComparison.OrdinalIgnoreCase) >= 0)
                     return true;
             }
             return false;
@@ -433,19 +436,31 @@ namespace RoMulti
             // Only runs when outlined purple event pixels exist in the crop (< 0.4ms check when absent).
             // Wipes cyan [Tips] above/below, green [System], white chat, and neon purple floors cleanly
             // to pure white so "[Event] Something feels off..." stays razor-sharp even at 60% low-res!
-            int purpleScale = Math.Max(scale, 5);
-            while (purpleScale > 2 && (Math.Max(rawCrop.Width, rawCrop.Height) * purpleScale) + (pad * 2) > 2600)
-                purpleScale--;
-            using (var purplePass = IsolatePurpleEventText(rawCrop, purpleScale, pad))
+            int priorityScale = Math.Max(scale, 5);
+            while (priorityScale > 2 && (Math.Max(rawCrop.Width, rawCrop.Height) * priorityScale) + (pad * 2) > 2600)
+                priorityScale--;
+            using (var purplePass = IsolatePurpleEventText(rawCrop, priorityScale, pad))
             {
                 if (purplePass != null)
                 {
-                    var linesPurple = await RunWinRtOcrPositionedAsync(engine, purplePass, cropTag + ":purple", purpleScale, pad, originY, previewOffsetY, rawCrop.Width);
+                    var linesPurple = await RunWinRtOcrPositionedAsync(engine, purplePass, cropTag + ":purple", priorityScale, pad, originY, previewOffsetY, rawCrop.Width);
                     MergePositionedLines(positioned, linesPurple);
                 }
             }
 
-            // Pass 4 (low-res / bright-sky colored fallback): run when prior passes read 0 lines, OR on very compact low-res
+            // Pass 4 (Priority Accent — Yellow Spirit Rift/Light Wisp + Green Wind Wisp + Red Blood Wisp/Leak):
+            // Conditional: returns null immediately if < 20 outlined accent pixels exist (0 extra OCR calls on idle frames).
+            // Wipes cyan [Tips], purple lines (e.g. Mammoth immediately above yellow Spirit Rift), and uniform walls cleanly!
+            using (var accentPass = IsolatePriorityAccentText(rawCrop, priorityScale, pad))
+            {
+                if (accentPass != null)
+                {
+                    var linesAccent = await RunWinRtOcrPositionedAsync(engine, accentPass, cropTag + ":accent", priorityScale, pad, originY, previewOffsetY, rawCrop.Width);
+                    MergePositionedLines(positioned, linesAccent);
+                }
+            }
+
+            // Pass 5 (low-res / bright-sky colored fallback): run when prior passes read 0 lines, OR on very compact low-res
             // windows when no event/rift line was recovered yet (only replaces a Y-band if OCR quality is strictly higher).
             if (positioned.Count == 0 || (scale >= 4 && !HasAnyEventOrPriorityLine(positioned)))
             {
@@ -1159,80 +1174,242 @@ namespace RoMulti
             if (candidateCount < 25) return null;
 
             // Verify outlined purple strokes (must sit near a dark TextStroke pixel to exclude uniform purple walls/floors)
-            var isolated = new Bitmap(w, h, PixelFormat.Format32bppArgb);
-            BitmapData dstData = isolated.LockBits(rect, ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb);
-            int outlinedPurple = 0;
-            try
+            using (var isolated = new Bitmap(w, h, PixelFormat.Format32bppArgb))
             {
-                int dstStride = dstData.Stride;
-                byte[] dBuf = new byte[Math.Abs(dstStride) * h];
-
-                for (int y = 0; y < h; y++)
+                BitmapData dstData = isolated.LockBits(rect, ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb);
+                int outlinedPurple = 0;
+                try
                 {
-                    int dRow = y * dstStride;
-                    int pRow = y * w;
-                    int yMin = y > 2 ? y - 2 : 0;
-                    int yMax = y + 2 < h ? y + 2 : h - 1;
-                    for (int x = 0; x < w; x++)
+                    int dstStride = dstData.Stride;
+                    byte[] dBuf = new byte[Math.Abs(dstStride) * h];
+
+                    for (int y = 0; y < h; y++)
                     {
-                        int outVal = 255;
-                        int sig = purpleSig[pRow + x];
-                        if (sig >= 18)
+                        int dRow = y * dstStride;
+                        int pRow = y * w;
+                        int yMin = y > 2 ? y - 2 : 0;
+                        int yMax = y + 2 < h ? y + 2 : h - 1;
+                        for (int x = 0; x < w; x++)
                         {
-                            byte minL = 255;
-                            int xMin = x > 2 ? x - 2 : 0;
-                            int xMax = x + 2 < w ? x + 2 : w - 1;
-                            for (int ny = yMin; ny <= yMax; ny++)
+                            int outVal = 255;
+                            int sig = purpleSig[pRow + x];
+                            if (sig >= 18)
                             {
-                                int nRow = ny * w;
-                                for (int nx = xMin; nx <= xMax; nx++)
+                                byte minL = 255;
+                                int xMin = x > 2 ? x - 2 : 0;
+                                int xMax = x + 2 < w ? x + 2 : w - 1;
+                                for (int ny = yMin; ny <= yMax; ny++)
                                 {
-                                    byte vL = luma[nRow + nx];
-                                    if (vL < minL) minL = vL;
+                                    int nRow = ny * w;
+                                    for (int nx = xMin; nx <= xMax; nx++)
+                                    {
+                                        byte vL = luma[nRow + nx];
+                                        if (vL < minL) minL = vL;
+                                    }
+                                }
+                                if (minL <= 84)
+                                {
+                                    int str = (int)((sig - 15) * 3.3);
+                                    if (str > 255) str = 255;
+                                    outVal = 255 - str;
+                                    if (outVal < 180) outlinedPurple++;
                                 }
                             }
-                            if (minL <= 84)
-                            {
-                                int str = (int)((sig - 15) * 3.3);
-                                if (str > 255) str = 255;
-                                outVal = 255 - str;
-                                if (outVal < 180) outlinedPurple++;
-                            }
-                        }
 
-                        int dIdx = dRow + x * 4;
-                        byte bo = (byte)outVal;
-                        dBuf[dIdx] = bo;
-                        dBuf[dIdx + 1] = bo;
-                        dBuf[dIdx + 2] = bo;
-                        dBuf[dIdx + 3] = 255;
+                            int dIdx = dRow + x * 4;
+                            byte bo = (byte)outVal;
+                            dBuf[dIdx] = bo;
+                            dBuf[dIdx + 1] = bo;
+                            dBuf[dIdx + 2] = bo;
+                            dBuf[dIdx + 3] = 255;
+                        }
                     }
+                    Marshal.Copy(dBuf, 0, dstData.Scan0, dBuf.Length);
                 }
-                Marshal.Copy(dBuf, 0, dstData.Scan0, dBuf.Length);
+                finally
+                {
+                    isolated.UnlockBits(dstData);
+                }
+
+                if (outlinedPurple < 20)
+                    return null;
+
+                int dstW = (w * scale) + (pad * 2);
+                int dstH = (h * scale) + (pad * 2);
+                var upscaled = new Bitmap(dstW, dstH, PixelFormat.Format32bppArgb);
+                try
+                {
+                    using (var g = Graphics.FromImage(upscaled))
+                    {
+                        g.Clear(Color.White);
+                        g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                        g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                        g.DrawImage(isolated, pad, pad, w * scale, h * scale);
+                    }
+                    return upscaled;
+                }
+                catch
+                {
+                    upscaled.Dispose();
+                    throw;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Dedicated outlined priority-accent isolator for Yellow/Gold (Spirit Rift, Light Wisp),
+        /// Green/Mint (Wind Wisp), and Red (Blood Wisp, Leak Event). Wipes cyan [Tips], purple lines
+        /// (e.g. Jungle Mammoth right above Yellow Spirit Rift), white chat, and uniform walls cleanly
+        /// to pure white. Returns null immediately if fewer than 20 outlined accent pixels exist so
+        /// normal frames incur zero extra OCR latency.
+        /// </summary>
+        private static Bitmap IsolatePriorityAccentText(Bitmap src, int scale, int pad)
+        {
+            int w = src.Width;
+            int h = src.Height;
+
+            var rect = new Rectangle(0, 0, w, h);
+            BitmapData srcData = src.LockBits(rect, ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+            byte[] sBuf;
+            int srcStride;
+            try
+            {
+                srcStride = srcData.Stride;
+                sBuf = new byte[Math.Abs(srcStride) * h];
+                Marshal.Copy(srcData.Scan0, sBuf, 0, sBuf.Length);
             }
             finally
             {
-                isolated.UnlockBits(dstData);
+                src.UnlockBits(srcData);
             }
 
-            if (outlinedPurple < 20)
+            byte[] luma = new byte[w * h];
+            byte[] accentSig = new byte[w * h];
+            int candidateCount = 0;
+
+            for (int y = 0; y < h; y++)
             {
-                isolated.Dispose();
-                return null;
+                int sRow = y * srcStride;
+                int pRow = y * w;
+                for (int x = 0; x < w; x++)
+                {
+                    int idx = sRow + x * 4;
+                    int b = sBuf[idx];
+                    int g = sBuf[idx + 1];
+                    int r = sBuf[idx + 2];
+                    luma[pRow + x] = (byte)((r * 30 + g * 59 + b * 11) / 100);
+
+                    int sig = 0;
+                    // Yellow / Gold (Spirit Rift, Light Wisp)
+                    if (r >= 155 && g >= 140 && b <= 145)
+                    {
+                        int ySig = Math.Min(r - b, g - b);
+                        if (ySig >= 34 && ySig > sig) sig = ySig;
+                    }
+                    // Green / Mint-Green (Wind Wisp)
+                    if (g >= 130 && (g - r) >= 20 && (g - b) >= 8)
+                    {
+                        int gSig = ((g - r) + (g - b)) / 2;
+                        if (gSig >= 20 && gSig > sig) sig = gSig;
+                    }
+                    // Red (Blood Wisp, Leak Event)
+                    if (r >= 150 && (r - g) >= 38 && (r - b) >= 38)
+                    {
+                        int rSig = Math.Min(r - g, r - b);
+                        if (rSig >= 38 && rSig > sig) sig = rSig;
+                    }
+
+                    if (sig > 0)
+                    {
+                        accentSig[pRow + x] = (byte)(sig > 255 ? 255 : sig);
+                        candidateCount++;
+                    }
+                }
             }
 
-            int dstW = (w * scale) + (pad * 2);
-            int dstH = (h * scale) + (pad * 2);
-            var upscaled = new Bitmap(dstW, dstH, PixelFormat.Format32bppArgb);
-            using (var g = Graphics.FromImage(upscaled))
+            if (candidateCount < 25) return null;
+
+            using (var isolated = new Bitmap(w, h, PixelFormat.Format32bppArgb))
             {
-                g.Clear(Color.White);
-                g.InterpolationMode = InterpolationMode.HighQualityBicubic;
-                g.PixelOffsetMode = PixelOffsetMode.HighQuality;
-                g.DrawImage(isolated, pad, pad, w * scale, h * scale);
+                BitmapData dstData = isolated.LockBits(rect, ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb);
+                int outlinedAccent = 0;
+                try
+                {
+                    int dstStride = dstData.Stride;
+                    byte[] dBuf = new byte[Math.Abs(dstStride) * h];
+
+                    for (int y = 0; y < h; y++)
+                    {
+                        int dRow = y * dstStride;
+                        int pRow = y * w;
+                        int yMin = y > 2 ? y - 2 : 0;
+                        int yMax = y + 2 < h ? y + 2 : h - 1;
+                        for (int x = 0; x < w; x++)
+                        {
+                            int outVal = 255;
+                            int sig = accentSig[pRow + x];
+                            if (sig > 0)
+                            {
+                                byte minL = 255;
+                                int xMin = x > 2 ? x - 2 : 0;
+                                int xMax = x + 2 < w ? x + 2 : w - 1;
+                                for (int ny = yMin; ny <= yMax; ny++)
+                                {
+                                    int nRow = ny * w;
+                                    for (int nx = xMin; nx <= xMax; nx++)
+                                    {
+                                        byte vL = luma[nRow + nx];
+                                        if (vL < minL) minL = vL;
+                                    }
+                                }
+                                if (minL <= 84)
+                                {
+                                    int str = (int)((sig - 16) * 3.2);
+                                    if (str < 0) str = 0;
+                                    if (str > 255) str = 255;
+                                    outVal = 255 - str;
+                                    if (outVal < 180) outlinedAccent++;
+                                }
+                            }
+
+                            int dIdx = dRow + x * 4;
+                            byte bo = (byte)outVal;
+                            dBuf[dIdx] = bo;
+                            dBuf[dIdx + 1] = bo;
+                            dBuf[dIdx + 2] = bo;
+                            dBuf[dIdx + 3] = 255;
+                        }
+                    }
+                    Marshal.Copy(dBuf, 0, dstData.Scan0, dBuf.Length);
+                }
+                finally
+                {
+                    isolated.UnlockBits(dstData);
+                }
+
+                if (outlinedAccent < 20)
+                    return null;
+
+                int dstW = (w * scale) + (pad * 2);
+                int dstH = (h * scale) + (pad * 2);
+                var upscaled = new Bitmap(dstW, dstH, PixelFormat.Format32bppArgb);
+                try
+                {
+                    using (var g = Graphics.FromImage(upscaled))
+                    {
+                        g.Clear(Color.White);
+                        g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                        g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                        g.DrawImage(isolated, pad, pad, w * scale, h * scale);
+                    }
+                    return upscaled;
+                }
+                catch
+                {
+                    upscaled.Dispose();
+                    throw;
+                }
             }
-            isolated.Dispose();
-            return upscaled;
         }
 
         private static byte[] EncodeBitmapToPng(Bitmap bmp)

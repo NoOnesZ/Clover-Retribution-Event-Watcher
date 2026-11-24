@@ -23,6 +23,7 @@ final class EventReplay {
         verifyMutedVampireCastle();
         verifyMutedRaidsAndWerewolf();
         verifyPriorityWispsAndSpiritRift();
+        verifyTier3IntentAndGluedDespawns();
         verifyLowResTagsAndNoise();
         EventHistory history = new EventHistory();
         expect(history, 0, "", TIP);
@@ -239,6 +240,93 @@ final class EventReplay {
         if (!despawnCheck.events.isEmpty()) {
             throw new AssertionError("Fuzzy despawn line leaked into alerts! count=" + despawnCheck.events.size());
         }
+    }
+
+    private static void verifyTier3IntentAndGluedDespawns() {
+        List<String> gluedDespawns = Arrays.asList(
+            "[Event] the Alpha Mossback Mammoth hasfallen.",
+            "[Event] The Alpha Mossback Mammoth hasfa1len.",
+            "[Event] The Alpha Mossback Mammoth has fallen.",
+            "[Event] Khamsin, the Sand Sage, has beendefeated.",
+            "[Event] The Bandit Lord hasvanished.",
+            "[Event] The Warlord has perished.",
+            "[Event] The ancient beast was silenced.",
+            "[Event] The Void Wisp was vanquished."
+        );
+        if (!EventMatcher.scan(gluedDespawns, true).events.isEmpty()) {
+            throw new AssertionError("Glued/expanded despawns leaked on Android!");
+        }
+        String[] safeUnknownSpawns = {
+            "[Event] The earth rumbles beneath the clover realm.",
+            "[Event] An eerie silence falls over the clover realm.",
+            "[Event] A muffled echo rises across the valley.",
+            "[Event] An unsettled aura gathers across the valley.",
+            "[Event] A new hero is leading the charge across the valley.",
+            "[Event] Something is breaking free in the clover sky!"
+        };
+        for (String safeLine : safeUnknownSpawns) {
+            List<EventMatcher.Detection> ev = EventMatcher.scan(Arrays.asList(safeLine), false).events;
+            if (ev.size() != 1 || !ev.get(0).rule.id.equals("unknown_event")) {
+                throw new AssertionError("Android valid spawn suppressed or misclassified: " + safeLine
+                    + " -> " + (ev.isEmpty() ? "none" : ev.get(0).rule.id));
+            }
+        }
+        if (EventMatcher.sameUnknownBroadcast(null, "anything") || EventMatcher.sameUnknownBroadcast("anything", null)) {
+            throw new AssertionError("Android sameUnknownBroadcast null guard failed!");
+        }
+        String[][] intentCases = {
+            { "spirit_rift", "[Event] A stranqe enerqy is felt throughout the klngdom" },
+            { "spirit_rift", "A stranqe enerqy is felt throughout the klngdom" },
+            { "wind_wisp", "[Event] A w1nd w15p stirs the Ieaves" },
+            { "wind_wisp", "A windwisp stirs the leaves" },
+            { "blood_wisp", "A bloodwisp has appeared across the grasslands" },
+            { "light_wisp", "A lightwisp has appeared across the grasslands" },
+            { "unknown_event", "[Event] Devil Rlft and felt throughout klngdom" }
+        };
+        for (String[] c : intentCases) {
+            List<EventMatcher.Detection> ev = EventMatcher.scan(Arrays.asList(c[1]), false).events;
+            if (ev.size() != 1 || !ev.get(0).rule.id.equals(c[0])) {
+                throw new AssertionError("Android intent case expected " + c[0] + ", got "
+                    + (ev.isEmpty() ? "none" : ev.get(0).rule.id) + " for: " + c[1]);
+            }
+        }
+        // Ignored mossback + garbled mammoth must yield 0 events
+        if (!EventMatcher.scan(Arrays.asList(
+                "[Event) A black-backed tnanunoth is shaking the western ridge.",
+                "[Event] An Alpha Mossback emerges in the jungle."), true).events.isEmpty()) {
+            throw new AssertionError("Android Jungle Mossback/Mammoth leaked!");
+        }
+        if (!EventMatcher.scan(Arrays.asList("wind appeared over the hill", "energy in the air"), true).events.isEmpty()) {
+            throw new AssertionError("Android tag-less noise false-triggered!");
+        }
+        if (EventMatcher.sameBroadcast(
+                "a blood wisp has appeared across the grasslands",
+                "a light wisp has appeared across the grasslands")
+            || EventMatcher.sameBroadcast(
+                "four stars glow marking the corners of a journey",
+                "five stars glow marking the corners of a journey")) {
+            throw new AssertionError("Android sameBroadcast collided distinct templates!");
+        }
+        if (!EventMatcher.sameUnknownBroadcast(
+                "a silver cornet passes over the eastem mountalns",
+                "a silwer comet passes ovcr the eastern mountains")) {
+            throw new AssertionError("Android sameUnknownBroadcast failed on 2+ word low-res unknown variants!");
+        }
+
+        // Unknown 2-frame confirmation & dedupe with 2+ shifted low-res words via sameUnknownBroadcast
+        EventHistory unkHistory = new EventHistory();
+        expect(unkHistory, 0, "", "[Tips] Ready.");
+        expect(unkHistory, 3, "", "[Tips] Ready.", "[Event] A silver cornet passes over the eastem mountalns.");
+        expect(unkHistory, 6, "unknown_event", "[Tips] Ready.", "[Event] A silwer comet passes ovcr the eastern mountains.");
+        expect(unkHistory, 9, "", "[Tips] Ready.", "[Event] A s1lver cornet passes over the eastem mountains.");
+
+        // Blood Wisp followed immediately by Light Wisp MUST BOTH alert (zero cross-event bigram collision!)
+        EventHistory wispHistory = new EventHistory();
+        expect(wispHistory, 0, "", "[Tips] Ready.");
+        expect(wispHistory, 3, "blood_wisp", "[Tips] Ready.", "[Event] A blood wisp has appeared across the grasslands.");
+        expect(wispHistory, 6, "light_wisp", "[Tips] Ready.",
+            "[Event] A blood wisp has appeared across the grasslands.",
+            "[Event] A light wisp has appeared across the grasslands.");
     }
 
     private static void verifyLowResTagsAndNoise() {

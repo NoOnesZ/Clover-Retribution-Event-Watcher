@@ -210,7 +210,7 @@ final class EventHistory {
     }
 
     private static boolean matchesUnknownKey(EventMatcher.Detection event, String key) {
-        return EventMatcher.sameBroadcast(event.bodyKey, key.substring(CloverRules.UNKNOWN.id.length() + 1));
+        return EventMatcher.sameUnknownBroadcast(event.bodyKey, key.substring(CloverRules.UNKNOWN.id.length() + 1));
     }
 
     private static boolean isUnknownKey(String key) {

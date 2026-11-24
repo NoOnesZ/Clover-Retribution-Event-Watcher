@@ -231,6 +231,83 @@ final class OcrTextCore {
     }
 
     /**
+     * Dedicated outlined priority-accent isolator for Yellow/Gold (Spirit Rift, Light Wisp),
+     * Green/Mint (Wind Wisp), and Red (Blood Wisp, Leak Event). Wipes cyan [Tips], purple lines
+     * (e.g. Jungle Mammoth directly above Yellow Spirit Rift), white chat, and uniform walls cleanly
+     * to pure white. Returns null when fewer than 20 outlined accent pixels exist so idle frames
+     * incur zero extra ML Kit overhead.
+     */
+    static int[] isolatePriorityAccentPixels(int[] srcArgb, int w, int h) {
+        int count = w * h;
+        int[] luma = new int[count];
+        int[] accentSig = new int[count];
+        int candidates = 0;
+
+        for (int i = 0; i < count; i++) {
+            int px = srcArgb[i];
+            int r = (px >>> 16) & 0xFF;
+            int g = (px >>> 8) & 0xFF;
+            int b = px & 0xFF;
+            luma[i] = (r * 30 + g * 59 + b * 11) / 100;
+
+            int sig = 0;
+            // Yellow / Gold (Spirit Rift, Light Wisp)
+            if (r >= 155 && g >= 140 && b <= 145) {
+                int ySig = Math.min(r - b, g - b);
+                if (ySig >= 34 && ySig > sig) sig = ySig;
+            }
+            // Green / Mint-Green (Wind Wisp)
+            if (g >= 130 && (g - r) >= 20 && (g - b) >= 8) {
+                int gSig = ((g - r) + (g - b)) / 2;
+                if (gSig >= 20 && gSig > sig) sig = gSig;
+            }
+            // Red (Blood Wisp, Leak Event)
+            if (r >= 150 && (r - g) >= 38 && (r - b) >= 38) {
+                int rSig = Math.min(r - g, r - b);
+                if (rSig >= 38 && rSig > sig) sig = rSig;
+            }
+
+            if (sig > 0) {
+                accentSig[i] = sig;
+                candidates++;
+            }
+        }
+        if (candidates < 25) return null;
+
+        int[] out = new int[count];
+        int outlined = 0;
+        for (int y = 0; y < h; y++) {
+            int row = y * w;
+            int yMin = Math.max(0, y - 2);
+            int yMax = Math.min(h - 1, y + 2);
+            for (int x = 0; x < w; x++) {
+                int idx = row + x;
+                int outVal = 255;
+                int sig = accentSig[idx];
+                if (sig > 0) {
+                    int minL = 255;
+                    int xMin = Math.max(0, x - 2);
+                    int xMax = Math.min(w - 1, x + 2);
+                    for (int ny = yMin; ny <= yMax; ny++) {
+                        int nRow = ny * w;
+                        for (int nx = xMin; nx <= xMax; nx++) {
+                            int vL = luma[nRow + nx];
+                            if (vL < minL) minL = vL;
+                        }
+                    }
+                    if (minL <= 84) {
+                        int str = Math.max(0, Math.min(255, (int) ((sig - 16) * 3.2)));
+                        outVal = 255 - str;
+                        if (outVal < 180) outlined++;
+                    }
+                }
+                out[idx] = 0xFF000000 | (outVal << 16) | (outVal << 8) | outVal;
+            }
+        }
+        return outlined >= 20 ? out : null;
+    }
+
+    /**
      * Gentle 3x3 unsharp mask to restore crisp letter edges after low-res upscaling.
      */
     static int[] sharpenPixels(int[] srcArgb, int w, int h, float amount) {
@@ -273,6 +350,11 @@ final class OcrTextCore {
 
     static List<PositionedLine> filterAndNormalizeLines(
             List<RawLine> rawLines, String passTag, int scale, int pad, int rawCropWidth) {
+        return filterAndNormalizeLines(rawLines, passTag, scale, pad, rawCropWidth, 0);
+    }
+
+    static List<PositionedLine> filterAndNormalizeLines(
+            List<RawLine> rawLines, String passTag, int scale, int pad, int rawCropWidth, int originY) {
         List<PositionedLine> result = new ArrayList<>();
         if (rawLines == null || rawLines.isEmpty()) return result;
         double invScale = 1.0 / Math.max(1, scale);
@@ -333,7 +415,7 @@ final class OcrTextCore {
                 continue;
             }
             if (!finalText.isEmpty()) {
-                result.add(new PositionedLine(centerY, minX, maxX, lineHeight, finalText, passTag));
+                result.add(new PositionedLine(originY + centerY, minX, maxX, lineHeight, finalText, passTag));
             }
         }
         return result;
@@ -378,6 +460,23 @@ final class OcrTextCore {
         List<String> texts = new ArrayList<>(positioned.size());
         for (PositionedLine line : positioned) {
             texts.add(line.text);
+        }
+        return texts;
+    }
+
+    static List<String> toLineTextsWithGapBreaks(List<PositionedLine> positioned) {
+        List<String> texts = new ArrayList<>(positioned.size() + 1);
+        PositionedLine prev = null;
+        for (PositionedLine line : positioned) {
+            if (prev != null) {
+                double maxH = Math.max(prev.lineHeight, line.lineHeight);
+                double gapThreshold = Math.max(90.0, maxH * 4.5);
+                if (line.centerY - prev.centerY > gapThreshold) {
+                    texts.add("");
+                }
+            }
+            texts.add(line.text);
+            prev = line;
         }
         return texts;
     }

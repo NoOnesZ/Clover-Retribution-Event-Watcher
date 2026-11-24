@@ -25,7 +25,8 @@ public final class DetectorSmokeRunner extends Instrumentation {
         EventReplay.verify();
         verifyPrivateServerField();
         verifyDiscordPing();
-        System.out.println("Android event replay and Discord ping/private server payloads: PASS");
+        verifyWebhookRetryPolicy();
+        System.out.println("Android event replay, Discord ping, private server & retry policy: PASS");
     }
 
     @Override
@@ -57,6 +58,7 @@ public final class DetectorSmokeRunner extends Instrumentation {
             if (!devil || !spirit) throw new AssertionError("Android OCR did not recognize both rifts");
             verifyPrivateServerField();
             verifyDiscordPing();
+            verifyWebhookRetryPolicy();
             EventReplay.verify();
 
             result.putString("stream", "\nAndroid OCR, event replay, private server and Discord ping payloads: PASS\n");
@@ -118,6 +120,25 @@ public final class DetectorSmokeRunner extends Instrumentation {
             throw new AssertionError("Group mentions must be rejected.");
         } catch (IllegalArgumentException expected) {
             // Only numeric Discord user IDs are allowed.
+        }
+    }
+
+    private static void verifyWebhookRetryPolicy() {
+        if (!DiscordWebhook.shouldRetryStatus(429) ||
+                !DiscordWebhook.shouldRetryStatus(500) ||
+                !DiscordWebhook.shouldRetryStatus(503) ||
+                DiscordWebhook.shouldRetryStatus(400) ||
+                DiscordWebhook.shouldRetryStatus(401) ||
+                DiscordWebhook.shouldRetryStatus(403) ||
+                DiscordWebhook.shouldRetryStatus(404)) {
+            throw new AssertionError("DiscordWebhook retry status classification mismatch.");
+        }
+        if (DiscordWebhook.computeRetryDelayMs(1, null) != 1000L ||
+                DiscordWebhook.computeRetryDelayMs(2, null) != 2500L ||
+                DiscordWebhook.computeRetryDelayMs(1, "0.1") != 500L ||
+                DiscordWebhook.computeRetryDelayMs(1, "1.8") != 1800L ||
+                DiscordWebhook.computeRetryDelayMs(1, "30") != 5000L) {
+            throw new AssertionError("DiscordWebhook retry delay/Retry-After clamping mismatch.");
         }
     }
 }

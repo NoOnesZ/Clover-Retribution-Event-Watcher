@@ -38,7 +38,8 @@ namespace RoMulti
 
             if (!VerifyWatcherSessionTracking() || !VerifyScheduledFocus() || !VerifyMainOnlyAntiAfk() ||
                 !VerifyFrozenCapture() || !VerifyCatalogTypos() || !VerifyOcrReplay() ||
-                !VerifyStarBroadcasts() || !VerifyVampireCastleIgnored() || !VerifyCompactDiscordPayload())
+                !VerifyStarBroadcasts() || !VerifyVampireCastleIgnored() || !VerifyTier3IntentAndGluedDespawns() ||
+                !VerifyTask3DedupeAndRetry() || !VerifyCompactDiscordPayload())
                 return 1;
 
             // 1. Roblox exe discovery
@@ -728,6 +729,53 @@ namespace RoMulti
                 Console.WriteLine("    6g Low-res compact OCR (adaptive 4x + sharpen + Vampire/Lucius ignored): OK");
             }
 
+            // 6h. Stacked priority colors jammed tightly next to purple Mammoth (Yellow Spirit Rift + Green Wind Wisp + Red Blood Wisp)
+            using (var accentBmp = new Bitmap(320, 115, PixelFormat.Format32bppArgb))
+            {
+                using (var g = Graphics.FromImage(accentBmp))
+                {
+                    g.Clear(Color.FromArgb(44, 50, 58));
+                    using (var f = new Font("Segoe UI", 8.0f, FontStyle.Bold))
+                    using (var outline = new SolidBrush(Color.FromArgb(18, 18, 22)))
+                    using (var purple = new SolidBrush(Color.FromArgb(185, 85, 245)))
+                    using (var yellow = new SolidBrush(Color.FromArgb(228, 232, 98)))
+                    using (var green = new SolidBrush(Color.FromArgb(95, 225, 165)))
+                    using (var red = new SolidBrush(Color.FromArgb(245, 82, 82)))
+                    {
+                        string[] rows = new[]
+                        {
+                            "[Event] A black-backed mammoth is shaking the western ridge.",
+                            "[Event] A strange energy is felt throughout the kingdom",
+                            "[Event] A wind wisp stirs the leaves somewhere in the woods",
+                            "[Event] A blood wisp has appeared across the grasslands"
+                        };
+                        Brush[] brushes = new Brush[] { purple, yellow, green, red };
+                        for (int r = 0; r < rows.Length; r++)
+                        {
+                            float y = 6 + r * 25;
+                            g.DrawString(rows[r], f, outline, 7, y);
+                            g.DrawString(rows[r], f, outline, 9, y);
+                            g.DrawString(rows[r], f, outline, 8, y - 1);
+                            g.DrawString(rows[r], f, outline, 8, y + 1);
+                            g.DrawString(rows[r], f, brushes[r], 8, y);
+                        }
+                    }
+                }
+                var accentLines = ChatOcrEngine.RecognizeChatLinesAsync(accentBmp).GetAwaiter().GetResult();
+                var accentMatches = EventCatalog.MatchAllOccurrences(accentLines, defaultCfg);
+                bool gotSpirit = accentMatches.Any(m => m.Rule.Id == "spirit_rift" && m.EffectiveLevel == EventAlertLevel.Ping);
+                bool gotWind = accentMatches.Any(m => m.Rule.Id == "wind_wisp" && m.EffectiveLevel == EventAlertLevel.Ping);
+                bool gotBlood = accentMatches.Any(m => m.Rule.Id == "blood_wisp" && m.EffectiveLevel == EventAlertLevel.Ping);
+                bool anyMammothActive = accentMatches.Any(m => m.Rule.Id == "jungle_bosses" && m.EffectiveLevel != EventAlertLevel.Ignore);
+                Console.WriteLine("    6h Priority Accent OCR lines: " + string.Join(" | ", accentLines));
+                if (!gotSpirit || !gotWind || !gotBlood || anyMammothActive)
+                {
+                    Console.WriteLine("FAIL 6h: Priority Accent OCR failed (spirit=" + gotSpirit + ", wind=" + gotWind + ", blood=" + gotBlood + ")");
+                    return 1;
+                }
+                Console.WriteLine("    6h Priority Accent Pass 4 (Yellow Spirit Rift + Green Wind Wisp + Red Blood Wisp): OK");
+            }
+
             // 7. Live Roblox log PlaceId & JobId extraction
             string logsDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Roblox", "logs");
             if (Directory.Exists(logsDir))
@@ -1125,6 +1173,232 @@ namespace RoMulti
                 }
             }
             Console.WriteLine("[OCR] Ignored (Vampire/Lucius/Kaldris/Werewolf) & Priority (All-In Devil Rift + Spirit Rift + Wind/Blood/Light Wisps): OK");
+            return true;
+        }
+
+        private static bool VerifyTier3IntentAndGluedDespawns()
+        {
+            var config = new RoMultiConfig();
+            // 1. Glued & expanded despawns must return 0 matches (including real screenshot "hasfallen." and digit-glitched "hasfa1len.")
+            var gluedDespawns = new[]
+            {
+                "[Event] the Alpha Mossback Mammoth hasfallen.",
+                "[Event] The Alpha Mossback Mammoth hasfa1len.",
+                "[Event] The Alpha Mossback Mammoth has fallen.",
+                "[Event] Khamsin, the Sand Sage, has beendefeated.",
+                "[Event] The Bandit Lord hasvanished.",
+                "[Event] The Warlord has perished.",
+                "[Event] The ancient beast was silenced.",
+                "[Event] The Void Wisp was vanquished."
+            };
+            var gdMatches = EventCatalog.MatchLines(gluedDespawns, config);
+            if (gdMatches.Count != 0)
+            {
+                Console.WriteLine("FAIL T1-1: Glued/expanded despawns leaked: " +
+                    string.Join(", ", gdMatches.Select(m => m.Rule.Id + ":" + m.RawLine)));
+                return false;
+            }
+            // Leak event + valid spawn wording ("rumbles", "silence", "muffled", "unsettled") & non-leak lines must remain immune
+            var leakCheck = EventCatalog.MatchLines(new[] { "[Leak] Something is leaking in the grasslands..." }, config);
+            if (leakCheck.Count != 1 || leakCheck[0].Rule.Id != "leak_event")
+            {
+                Console.WriteLine("FAIL T1-2: leak_event was suppressed!");
+                return false;
+            }
+            var nonDespawnAndNonLeak = new[]
+            {
+                "[Event] The earth rumbles beneath the clover realm.",
+                "[Event] An eerie silence falls over the clover realm.",
+                "[Event] A muffled echo rises across the valley.",
+                "[Event] An unsettled aura gathers across the valley.",
+                "[Event] A new hero is leading the charge across the valley.",
+                "[Event] Something is breaking free in the clover sky!"
+            };
+            foreach (string safeLine in nonDespawnAndNonLeak)
+            {
+                var foundSafe = EventCatalog.MatchLines(new[] { safeLine }, config);
+                if (foundSafe.Count != 1 || foundSafe[0].Rule.Id != "unknown_event")
+                {
+                    Console.WriteLine("FAIL T1-2b: Valid spawn line suppressed or misclassified as " +
+                        string.Join(",", foundSafe.Select(m => m.Rule.Id)) + " -> " + safeLine);
+                    return false;
+                }
+            }
+
+            // Anti-stitch guard: unpunctuated tagged Wind Wisp followed by tag-less Blood Wisp MUST emit BOTH priority alerts!
+            var stackedPriority = EventCatalog.MatchAllOccurrences(new[]
+            {
+                "[Event] A wind wisp stirs the leaves somewhere in",
+                "A blood wisp has appeared across the grasslands"
+            }, config);
+            if (stackedPriority.Count != 2 || stackedPriority[0].Rule.Id != "wind_wisp" || stackedPriority[1].Rule.Id != "blood_wisp")
+            {
+                Console.WriteLine("FAIL T1-2c: Anti-stitch guard swallowed stacked priority wisp: " +
+                    string.Join(",", stackedPriority.Select(m => m.Rule.Id)));
+                return false;
+            }
+
+            // 2. Glued + multi-typo Tier-3 intent matches
+            string[,] intentCases = {
+                { "spirit_rift", "[Event] A stranqe enerqy is felt throughout the klngdom" },
+                { "spirit_rift", "A stranqe enerqy is felt throughout the klngdom" },
+                { "wind_wisp", "[Event] A w1nd w15p stirs the Ieaves" },
+                { "wind_wisp", "A windwisp stirs the leaves" },
+                { "blood_wisp", "A bloodwisp has appeared across the grasslands" },
+                { "light_wisp", "A lightwisp has appeared across the grasslands" },
+                { "jungle_bosses", "[Event) A black-backed tnanunoth is shaking the western ridge." },
+                { "jungle_bosses", "[Event] An Alpha Mossback emerges in the jungle." },
+                { "unknown_event", "[Event] Devil Rlft and felt throughout klngdom" }
+            };
+            for (int i = 0; i < intentCases.GetLength(0); i++)
+            {
+                var found = EventCatalog.MatchLines(new[] { intentCases[i, 1] }, config);
+                if (found.Count != 1 || found[0].Rule.Id != intentCases[i, 0])
+                {
+                    Console.WriteLine("FAIL T1-3: Intent case expected " + intentCases[i, 0] + ", got " +
+                        string.Join(",", found.Select(m => m.Rule.Id)) + " for: " + intentCases[i, 1]);
+                    return false;
+                }
+            }
+            // 3. Tag-less safety guard: bare non-opening fragments must NOT trigger priority
+            var taglessNoise = EventCatalog.MatchLines(new[] { "wind appeared over the hill", "energy in the air" }, config);
+            if (taglessNoise.Count != 0)
+            {
+                Console.WriteLine("FAIL T1-4: Tag-less non-opening fragment false-triggered!");
+                return false;
+            }
+
+            // 4. SameUnknownBroadcast vs SameBroadcastText isolation (Blood vs Light Wisp MUST NOT match in SameBroadcastText!)
+            if (EventCatalog.SameBroadcastText(
+                    "a blood wisp has appeared across the grasslands",
+                    "a light wisp has appeared across the grasslands") ||
+                EventCatalog.SameBroadcastText(
+                    "four stars glow marking the corners of a journey",
+                    "five stars glow marking the corners of a journey"))
+            {
+                Console.WriteLine("FAIL T1-5: SameBroadcastText collided distinct named templates!");
+                return false;
+            }
+            if (EventCatalog.SameUnknownBroadcast(null, "anything") || EventCatalog.SameUnknownBroadcast("anything", null))
+            {
+                Console.WriteLine("FAIL T1-6b: SameUnknownBroadcast null guard failed!");
+                return false;
+            }
+            if (!EventCatalog.SameUnknownBroadcast(
+                    "a silver cornet passes over the eastem mountalns",
+                    "a silwer comet passes ovcr the eastern mountains"))
+            {
+                Console.WriteLine("FAIL T1-6: SameUnknownBroadcast failed to match 2+ word low-res unknown variants!");
+                return false;
+            }
+
+            Console.WriteLine("[OCR] Task 1 Glued despawns, Tier-3 intent, ambiguity guard & unknown bigram isolation: OK");
+            return true;
+        }
+
+        private static bool VerifyTask3DedupeAndRetry()
+        {
+            var config = new RoMultiConfig();
+            var t0 = new DateTime(2026, 11, 24, 15, 0, 0, DateTimeKind.Utc);
+
+            // 1. Unknown 2-frame confirmation & dedupe with 2+ shifted low-res words via SameUnknownBroadcast
+            var unkNotifier = new DiscordNotifier();
+            bool init;
+            int baseCount;
+            List<string> tl;
+            var m0 = EventCatalog.MatchAllOccurrences(new[] { "[Tips] Ready." }, config, out tl);
+            unkNotifier.FilterNewOccurrencesForPid(701, "job-u1", tl, m0, false, out init, out baseCount, t0);
+
+            var m1 = EventCatalog.MatchAllOccurrences(new[] { "[Tips] Ready.", "[Event] A silver cornet passes over the eastem mountalns." }, config, out tl);
+            var e1 = unkNotifier.FilterNewOccurrencesForPid(701, "job-u1", tl, m1, false, out init, out baseCount, t0.AddSeconds(3));
+            var m2 = EventCatalog.MatchAllOccurrences(new[] { "[Tips] Ready.", "[Event] A silwer comet passes ovcr the eastern mountains." }, config, out tl);
+            var e2 = unkNotifier.FilterNewOccurrencesForPid(701, "job-u1", tl, m2, false, out init, out baseCount, t0.AddSeconds(6));
+            var m3 = EventCatalog.MatchAllOccurrences(new[] { "[Tips] Ready.", "[Event] A s1lver cornet passes over the eastem mountains." }, config, out tl);
+            var e3 = unkNotifier.FilterNewOccurrencesForPid(701, "job-u1", tl, m3, false, out init, out baseCount, t0.AddSeconds(9));
+            if (e1.Count != 0 || e2.Count != 1 || e2[0].Rule.Id != "unknown_event" || e3.Count != 0)
+            {
+                Console.WriteLine(string.Format("FAIL T3-1: Unknown bigram 2-frame confirmation/dedupe failed (e1={0}, e2={1}, e3={2}).",
+                    e1.Count, e2.Count, e3.Count));
+                return false;
+            }
+
+            // 2. Blood Wisp followed immediately by Light Wisp MUST BOTH alert (zero cross-event collision!)
+            var wispNotifier = new DiscordNotifier();
+            var wb0 = EventCatalog.MatchAllOccurrences(new[] { "[Tips] Ready." }, config, out tl);
+            wispNotifier.FilterNewOccurrencesForPid(702, "job-w1", tl, wb0, false, out init, out baseCount, t0);
+            var wb1 = EventCatalog.MatchAllOccurrences(new[] { "[Tips] Ready.", "[Event] A blood wisp has appeared across the grasslands." }, config, out tl);
+            var we1 = wispNotifier.FilterNewOccurrencesForPid(702, "job-w1", tl, wb1, false, out init, out baseCount, t0.AddSeconds(3));
+            var wb2 = EventCatalog.MatchAllOccurrences(new[]
+            {
+                "[Tips] Ready.",
+                "[Event] A blood wisp has appeared across the grasslands.",
+                "[Event] A light wisp has appeared across the grasslands."
+            }, config, out tl);
+            var we2 = wispNotifier.FilterNewOccurrencesForPid(702, "job-w1", tl, wb2, false, out init, out baseCount, t0.AddSeconds(6));
+            if (we1.Count != 1 || we1[0].Rule.Id != "blood_wisp" || we2.Count != 1 || we2[0].Rule.Id != "light_wisp")
+            {
+                Console.WriteLine("FAIL T3-2: Blood Wisp + Light Wisp collided or failed to both alert!");
+                return false;
+            }
+
+            // 3. Cross-PID same-JobId dedupe (90s window, only when jobId non-empty and sourcePid differs)
+            var srvNotifier = new DiscordNotifier();
+            if (srvNotifier.IsDuplicateOnSameServerAndRecord("job-shared", "devil_rift", 101, true, t0))
+            {
+                Console.WriteLine("FAIL T3-3a: First PID should never be marked duplicate.");
+                return false;
+            }
+            if (!srvNotifier.IsDuplicateOnSameServerAndRecord("job-shared", "devil_rift", 102, false, t0.AddSeconds(30)))
+            {
+                Console.WriteLine("FAIL T3-3b: Second PID on same JobId within 90s must be suppressed.");
+                return false;
+            }
+            if (srvNotifier.IsDuplicateOnSameServerAndRecord("job-other", "devil_rift", 102, false, t0.AddSeconds(30)))
+            {
+                Console.WriteLine("FAIL T3-3c: Different JobId must NOT be suppressed.");
+                return false;
+            }
+            if (srvNotifier.IsDuplicateOnSameServerAndRecord("job-shared", "devil_rift", 101, true, t0.AddSeconds(30)))
+            {
+                Console.WriteLine("FAIL T3-3d: Same PID genuine 2nd spawn must NOT be suppressed.");
+                return false;
+            }
+            if (srvNotifier.IsDuplicateOnSameServerAndRecord("", "devil_rift", 102, false, t0.AddSeconds(30)))
+            {
+                Console.WriteLine("FAIL T3-3e: Empty JobId must never suppress.");
+                return false;
+            }
+            if (srvNotifier.IsDuplicateOnSameServerAndRecord("job-shared", "devil_rift", 102, false, t0.AddSeconds(125)))
+            {
+                Console.WriteLine("FAIL T3-3f: Same-JobId cross-PID dedupe should expire after 90s.");
+                return false;
+            }
+
+            // 4. Webhook retry policy & version check
+            if (!DiscordNotifier.ShouldRetryHttpStatus(429) ||
+                !DiscordNotifier.ShouldRetryHttpStatus(500) ||
+                !DiscordNotifier.ShouldRetryHttpStatus(503) ||
+                DiscordNotifier.ShouldRetryHttpStatus(400) ||
+                DiscordNotifier.ShouldRetryHttpStatus(401) ||
+                DiscordNotifier.ShouldRetryHttpStatus(403) ||
+                DiscordNotifier.ShouldRetryHttpStatus(404))
+            {
+                Console.WriteLine("FAIL T3-4a: DiscordNotifier retry status classification mismatch.");
+                return false;
+            }
+            if (DiscordNotifier.ComputeRetryDelayMs(1, null) != 1000 ||
+                DiscordNotifier.ComputeRetryDelayMs(2, null) != 2500 ||
+                DiscordNotifier.ComputeRetryDelayMs(1, TimeSpan.FromMilliseconds(120)) != 500 ||
+                DiscordNotifier.ComputeRetryDelayMs(1, TimeSpan.FromSeconds(1.8)) != 1800 ||
+                DiscordNotifier.ComputeRetryDelayMs(1, TimeSpan.FromSeconds(30)) != 5000 ||
+                DiscordNotifier.ComputeRetryDelayMs(1, TimeSpan.FromDays(40000)) != 5000 ||
+                MainWindow.AppVersion != "v1.4.0")
+            {
+                Console.WriteLine("FAIL T3-4b: DiscordNotifier retry delay clamping or MainWindow.AppVersion mismatch.");
+                return false;
+            }
+
+            Console.WriteLine("[Discord] Task 3 Unknown bigram wiring, cross-PID JobId dedupe, retry policy & v1.4.0: OK");
             return true;
         }
 

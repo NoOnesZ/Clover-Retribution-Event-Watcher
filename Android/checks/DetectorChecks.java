@@ -104,6 +104,54 @@ public final class DetectorChecks {
             throw new AssertionError("Purple Devil Rift isolator failed to keep purple strokes or wipe cyan [Tips].");
         }
 
+        // Priority Accent (Yellow/Green/Red) isolator: rejects uniform yellow wall & purple/cyan-only crops,
+        // keeps outlined Yellow (Spirit Rift), Green (Wind Wisp), Red (Blood Wisp), wipes purple & cyan to white.
+        int[] uniformYellow = new int[pw * ph];
+        Arrays.fill(uniformYellow, 0xFFE5D850);
+        if (OcrTextCore.isolatePriorityAccentPixels(uniformYellow, pw, ph) != null) {
+            throw new AssertionError("Uniform yellow wall must not trigger Priority Accent pass.");
+        }
+        if (OcrTextCore.isolatePriorityAccentPixels(outlinedPurpleBlock, pw, ph) != null) {
+            throw new AssertionError("Purple + cyan only crop must not trigger Priority Accent pass.");
+        }
+        int aw = 28, ah = 28;
+        int[] accentCrop = new int[aw * ah];
+        Arrays.fill(accentCrop, 0xFF1A1A20);
+        // Outlined Yellow row (Spirit Rift / Light Wisp)
+        for (int y = 3; y <= 6; y++) for (int x = 3; x <= 14; x++) accentCrop[y * aw + x] = 0xFFE2E668;
+        // Outlined Mint-Green row (Wind Wisp)
+        for (int y = 9; y <= 12; y++) for (int x = 3; x <= 14; x++) accentCrop[y * aw + x] = 0xFF5EE0A8;
+        // Outlined Red row (Blood Wisp / Leak)
+        for (int y = 15; y <= 18; y++) for (int x = 3; x <= 14; x++) accentCrop[y * aw + x] = 0xFFEF5555;
+        // Outlined Purple row (Mammoth — must be wiped to pure white!)
+        for (int y = 21; y <= 24; y++) for (int x = 3; x <= 14; x++) accentCrop[y * aw + x] = 0xFF9C4BF5;
+        int[] accentOut = OcrTextCore.isolatePriorityAccentPixels(accentCrop, aw, ah);
+        if (accentOut == null
+                || (accentOut[4 * aw + 5] & 0xFF) >= 120
+                || (accentOut[10 * aw + 5] & 0xFF) >= 120
+                || (accentOut[16 * aw + 5] & 0xFF) >= 120
+                || accentOut[22 * aw + 5] != 0xFFFFFFFF) {
+            throw new AssertionError("Priority Accent isolator failed to isolate Yellow/Green/Red or wipe Purple.");
+        }
+
+        // Full-frame Y coordinate cross-band overlap deduplication (top band originY=0, bottom band originY=480)
+        int bandScale = 2;
+        int bandPad = OcrTextCore.PAD_PX;
+        List<OcrTextCore.RawLine> topBandRaw = Collections.singletonList(
+            new OcrTextCore.RawLine(bandPad + 10 * bandScale, bandPad + 495 * bandScale,
+                bandPad + 220 * bandScale, bandPad + 509 * bandScale,
+                "[Event] A strange energy is felt throughout the kingdom", Collections.<OcrTextCore.RawWord>emptyList()));
+        List<OcrTextCore.RawLine> botBandRaw = Collections.singletonList(
+            new OcrTextCore.RawLine(bandPad + 10 * bandScale, bandPad + 15 * bandScale,
+                bandPad + 220 * bandScale, bandPad + 29 * bandScale,
+                "[Event] A strange energy is felt throughout the kingdom", Collections.<OcrTextCore.RawWord>emptyList()));
+        List<OcrTextCore.PositionedLine> topPos = OcrTextCore.filterAndNormalizeLines(topBandRaw, "top:p1", bandScale, bandPad, 600, 0);
+        List<OcrTextCore.PositionedLine> botPos = OcrTextCore.filterAndNormalizeLines(botBandRaw, "bot:p1", bandScale, bandPad, 600, 480);
+        List<OcrTextCore.PositionedLine> mergedBands = OcrTextCore.mergePasses(topPos, botPos);
+        if (mergedBands.size() != 1) {
+            throw new AssertionError("Cross-band overlap line was duplicated! count=" + mergedBands.size());
+        }
+
         // Geometric HUD slicing + right-shifted HUD removal + Y-band quality merge
         int scale = 3;
         int pad = OcrTextCore.PAD_PX;

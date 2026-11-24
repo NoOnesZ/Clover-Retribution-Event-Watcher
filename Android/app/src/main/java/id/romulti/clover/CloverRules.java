@@ -25,8 +25,8 @@ final class CloverRules {
 
     static final EventMatcher.Rule JUNGLE_BOSSES = new EventMatcher.Rule(
         "jungle_bosses", "Jungle Bosses (Crocodile / Mammoth)", 0x78716C, false, false,
-        "crocodile|black scaled|surfaced southern|southern waters|mammoth|black backed|"
-            + "shaking western|shakin western|western ridge");
+        "crocodile|black scaled|surfaced southern|southern waters|mammoth|mossback|alpha mossback|"
+            + "black backed|shaking western|shakin western|western ridge");
 
     static boolean isAlwaysMuted(EventMatcher.Rule rule) {
         return rule == GIANT_DEMON || rule == VAMPIRE_CASTLE || rule == EMBER_RAID
@@ -100,13 +100,23 @@ final class CloverRules {
     static final String[] DESPAWN = {
         "vanish", "eanish", "vanished", "despawn", "disappear", "dissipat", "subsid",
         "fade", "fading", "defeat", "defeated", "slain", "was killed", "has died",
-        "has fallen", "falls to", "leaving only", "leaving on", "leaving ont",
+        "has fallen", "fallen", "falls to", "perished", "silenced", "vanquished",
+        "crumbles", "crumbled", "calms", "has settled", "is settled", "settled down",
+        "leaving only", "leaving on", "leaving ont",
         "in his wake", "his wake", "h is wake", "in its wake", "its wake", "whispers in",
         "beneath the dunes", "vowing revenge", "vowing", "revenge", "misteriously",
         "mysteriously", "retreat", "depart", "banish", "cease", "collaps",
         "dissolv", "reced", "sinks back", "returns to the", "returned to", "left the",
         "has ended", "event ended", "has closed", "portal closed", "rift closed", "closes",
-        "no longer", "calm returns", "peace returns", "overcome", "extinguished", "has fled", "expired"
+        "no longer", "calm returns", "peace returns", "overcome", "extinguished", "has fled", "was fled", "fled the", "expired"
+    };
+
+    static final String[] GLUED_DESPAWN_COMPOUNDS = {
+        "hasfallen", "wasfallen", "beendefeated", "wasdefeated", "hasvanished", "wasvanished",
+        "hasdespawned", "hasdisappeared", "hassubsided", "hasended", "hasclosed",
+        "wasslain", "beenslain", "hasperished", "fadesaway", "fadinginto",
+        "leavingonly", "leavingont", "inhiswake", "initswake", "vowingrevenge",
+        "cruciblecools", "orderisrestored", "releasesitsgrip", "darkreign"
     };
 
     static final String[] FUZZY_DESPAWN_WORDS = {
@@ -119,6 +129,7 @@ final class CloverRules {
         "dissipate", "dissipates", "dissipated",
         "subside", "subsides", "subsided",
         "banish", "banished",
+        "fallen", "perished", "vanquished",
         "extinguished", "revenge"
     };
 

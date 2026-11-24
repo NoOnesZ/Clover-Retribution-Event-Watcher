@@ -1,6 +1,6 @@
 # Clover Event Detector for Android
 
-The standalone Android detector uses the screen-sharing permission to scan landscape Clover Retribution chat about every three seconds. Recognition runs on the device using a 2-pass low-resolution-friendly OCR pipeline. The optional Discord webhook sends the event title and configured private server code (raw OCR broadcast text is only attached for unregistered `Other [Event] Broadcast` alerts). Stop capture in the app, via its notification, or via Android's screen-sharing controls.
+The standalone Android detector uses the screen-sharing permission to scan landscape Clover Retribution chat about every three seconds. Recognition runs on the device using a multi-pass low-resolution-friendly OCR pipeline (with conditional Purple and Priority Accent color isolation and full-screen Y cross-band deduplication). The optional Discord webhook sends the event title and configured private server code with automatic bounded retry on transient network/429/5xx failures (raw OCR broadcast text is only attached for unregistered `Other [Event] Broadcast` alerts). Stop capture in the app, via its notification, or via Android's screen-sharing controls.
 
 1. Install the APK on Android 8.0 or newer.
 2. Open **Clover Event Detector**, optionally add and test your Discord webhook, then tap **Mulai pemantauan**.

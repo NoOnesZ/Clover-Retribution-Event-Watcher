@@ -272,7 +272,7 @@ public final class WatchService extends Service {
             if (region != 2) bands.add(AndroidOcrPipeline.prepareBandPasses(frame, image.getWidth(), image.getHeight(), true));
             if (region != 1) bands.add(AndroidOcrPipeline.prepareBandPasses(frame, image.getWidth(), image.getHeight(), false));
             return bands;
-        } catch (RuntimeException problem) {
+        } catch (RuntimeException | Error problem) {
             recycleBands(bands, 0);
             throw problem;
         } finally {
@@ -286,7 +286,11 @@ public final class WatchService extends Service {
         }
     }
 
-    private void recognizeBand(List<AndroidOcrPipeline.BandPasses> bands, int index, List<String> lines, int frameGeneration) {
+    private void recognizeBand(
+            List<AndroidOcrPipeline.BandPasses> bands,
+            int index,
+            List<OcrTextCore.PositionedLine> allPositioned,
+            int frameGeneration) {
         if (!active || frameGeneration != generation || !isVisible) {
             recycleBands(bands, index);
             inFlight = false;
@@ -294,7 +298,7 @@ public final class WatchService extends Service {
         }
         if (index == bands.size()) {
             inFlight = false;
-            onRecognized(lines);
+            onRecognized(OcrTextCore.toLineTextsWithGapBreaks(allPositioned));
             return;
         }
 
@@ -310,7 +314,8 @@ public final class WatchService extends Service {
                     return;
                 }
                 List<OcrTextCore.PositionedLine> pass1 = task1.isSuccessful()
-                    ? AndroidOcrPipeline.extractPositionedLines(task1.getResult(), "p1", band.scale, band.pad, band.rawCropWidth)
+                    ? AndroidOcrPipeline.extractPositionedLines(
+                        task1.getResult(), band.bandTag + ":p1", band.scale, band.pad, band.rawCropWidth, band.originY)
                     : null;
 
                 try {
@@ -324,7 +329,8 @@ public final class WatchService extends Service {
                             return;
                         }
                         List<OcrTextCore.PositionedLine> pass2 = task2.isSuccessful()
-                            ? AndroidOcrPipeline.extractPositionedLines(task2.getResult(), "p2", band.scale, band.pad, band.rawCropWidth)
+                            ? AndroidOcrPipeline.extractPositionedLines(
+                                task2.getResult(), band.bandTag + ":p2", band.scale, band.pad, band.rawCropWidth, band.originY)
                             : null;
                         if (pass1 == null && pass2 == null) {
                             recycleBands(bands, index);
@@ -333,32 +339,7 @@ public final class WatchService extends Service {
                             return;
                         }
                         List<OcrTextCore.PositionedLine> merged = OcrTextCore.mergePasses(pass1, pass2);
-                        if (band.purplePass != null && !band.purplePass.isRecycled()) {
-                            try {
-                                recognizer.process(InputImage.fromBitmap(band.purplePass, 0)).addOnCompleteListener(command -> {
-                                    if (!worker.post(command)) command.run();
-                                }, task3 -> {
-                                    if (!band.purplePass.isRecycled()) band.purplePass.recycle();
-                                    if (!active || frameGeneration != generation || !isVisible) {
-                                        recycleBands(bands, index + 1);
-                                        inFlight = false;
-                                        return;
-                                    }
-                                    List<OcrTextCore.PositionedLine> finalMerged = merged;
-                                    if (task3.isSuccessful()) {
-                                        List<OcrTextCore.PositionedLine> pass3 = AndroidOcrPipeline.extractPositionedLines(
-                                            task3.getResult(), "p3", band.purpleScale, band.pad, band.rawCropWidth);
-                                        finalMerged = OcrTextCore.mergePasses(merged, pass3);
-                                    }
-                                    appendBandAndContinue(bands, index, lines, finalMerged, frameGeneration);
-                                });
-                            } catch (RuntimeException failure) {
-                                if (!band.purplePass.isRecycled()) band.purplePass.recycle();
-                                appendBandAndContinue(bands, index, lines, merged, frameGeneration);
-                            }
-                        } else {
-                            appendBandAndContinue(bands, index, lines, merged, frameGeneration);
-                        }
+                        runPurplePass(bands, index, allPositioned, merged, frameGeneration);
                     });
                 } catch (RuntimeException failure) {
                     recycleBands(bands, index);
@@ -373,18 +354,87 @@ public final class WatchService extends Service {
         }
     }
 
+    private void runPurplePass(
+            List<AndroidOcrPipeline.BandPasses> bands,
+            int index,
+            List<OcrTextCore.PositionedLine> allPositioned,
+            List<OcrTextCore.PositionedLine> merged,
+            int frameGeneration) {
+        AndroidOcrPipeline.BandPasses band = bands.get(index);
+        if (band.purplePass == null || band.purplePass.isRecycled()) {
+            runAccentPass(bands, index, allPositioned, merged, frameGeneration);
+            return;
+        }
+        try {
+            recognizer.process(InputImage.fromBitmap(band.purplePass, 0)).addOnCompleteListener(command -> {
+                if (!worker.post(command)) command.run();
+            }, task3 -> {
+                if (!band.purplePass.isRecycled()) band.purplePass.recycle();
+                if (!active || frameGeneration != generation || !isVisible) {
+                    recycleBands(bands, index);
+                    inFlight = false;
+                    return;
+                }
+                List<OcrTextCore.PositionedLine> nextMerged = merged;
+                if (task3.isSuccessful()) {
+                    List<OcrTextCore.PositionedLine> pass3 = AndroidOcrPipeline.extractPositionedLines(
+                        task3.getResult(), band.bandTag + ":p3", band.purpleScale, band.pad, band.rawCropWidth, band.originY);
+                    nextMerged = OcrTextCore.mergePasses(merged, pass3);
+                }
+                runAccentPass(bands, index, allPositioned, nextMerged, frameGeneration);
+            });
+        } catch (RuntimeException failure) {
+            if (!band.purplePass.isRecycled()) band.purplePass.recycle();
+            runAccentPass(bands, index, allPositioned, merged, frameGeneration);
+        }
+    }
+
+    private void runAccentPass(
+            List<AndroidOcrPipeline.BandPasses> bands,
+            int index,
+            List<OcrTextCore.PositionedLine> allPositioned,
+            List<OcrTextCore.PositionedLine> merged,
+            int frameGeneration) {
+        AndroidOcrPipeline.BandPasses band = bands.get(index);
+        if (band.accentPass == null || band.accentPass.isRecycled()) {
+            appendBandAndContinue(bands, index, allPositioned, merged, frameGeneration);
+            return;
+        }
+        try {
+            recognizer.process(InputImage.fromBitmap(band.accentPass, 0)).addOnCompleteListener(command -> {
+                if (!worker.post(command)) command.run();
+            }, task4 -> {
+                if (!band.accentPass.isRecycled()) band.accentPass.recycle();
+                if (!active || frameGeneration != generation || !isVisible) {
+                    recycleBands(bands, index);
+                    inFlight = false;
+                    return;
+                }
+                List<OcrTextCore.PositionedLine> finalMerged = merged;
+                if (task4.isSuccessful()) {
+                    List<OcrTextCore.PositionedLine> pass4 = AndroidOcrPipeline.extractPositionedLines(
+                        task4.getResult(), band.bandTag + ":p4", band.accentScale, band.pad, band.rawCropWidth, band.originY);
+                    finalMerged = OcrTextCore.mergePasses(merged, pass4);
+                }
+                appendBandAndContinue(bands, index, allPositioned, finalMerged, frameGeneration);
+            });
+        } catch (RuntimeException failure) {
+            if (!band.accentPass.isRecycled()) band.accentPass.recycle();
+            appendBandAndContinue(bands, index, allPositioned, merged, frameGeneration);
+        }
+    }
+
     private void appendBandAndContinue(
             List<AndroidOcrPipeline.BandPasses> bands,
             int index,
-            List<String> lines,
-            List<OcrTextCore.PositionedLine> merged,
+            List<OcrTextCore.PositionedLine> allPositioned,
+            List<OcrTextCore.PositionedLine> bandMerged,
             int frameGeneration) {
-        List<String> bandLines = OcrTextCore.toLineTexts(merged);
-        if (!bandLines.isEmpty()) {
-            if (!lines.isEmpty()) lines.add("");
-            lines.addAll(bandLines);
-        }
-        recognizeBand(bands, index + 1, lines, frameGeneration);
+        bands.get(index).recycle();
+        List<OcrTextCore.PositionedLine> nextAll = allPositioned.isEmpty()
+            ? bandMerged
+            : OcrTextCore.mergePasses(allPositioned, bandMerged);
+        recognizeBand(bands, index + 1, nextAll, frameGeneration);
     }
 
     private void onRecognized(List<String> lines) {
@@ -411,6 +461,7 @@ public final class WatchService extends Service {
             DiscordWebhook.sendEvent(webhook, event, privateServerCode, discordUserId);
             publishDelivery("Discord terkirim · " + event.rule.title);
         } catch (Exception e) {
+            if (e instanceof InterruptedException) Thread.currentThread().interrupt();
             publishDelivery(event.rule.title + " · " + DiscordWebhook.explainFailure(e));
         }
     }

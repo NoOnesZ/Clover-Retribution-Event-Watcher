@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -73,13 +74,22 @@ namespace RoMulti
             public HashSet<string> LastScanLineSigs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         }
 
+        private sealed class ServerSentEntry
+        {
+            public int SourcePid;
+            public DateTime SentAtUtc;
+        }
+
         private static readonly HttpClient Http = CreateHttpClient();
         private readonly object _dedupeLock = new object();
         private readonly Dictionary<string, DateTime> _sentRecently = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, ServerSentEntry> _serverSentRecently = new Dictionary<string, ServerSentEntry>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<int, PidWatcherState> _pidStates = new Dictionary<int, PidWatcherState>();
         private static readonly TimeSpan DedupeCooldown = TimeSpan.FromMinutes(5);
+        private static readonly TimeSpan CrossPidServerDedupeWindow = TimeSpan.FromSeconds(90);
         private static readonly TimeSpan ScrollReplayWindow = TimeSpan.FromMinutes(2);
         private static readonly TimeSpan ForgetInvisibleAfter = TimeSpan.FromMinutes(30);
+        private const int MaxWebhookAttempts = 3;
         private const string UnknownPrefix = "unknown:";
         private static readonly Regex PrivateServerPattern = new Regex(@"\A[A-Za-z0-9_-]{0,128}\z");
         private static readonly Regex SingleUserMention = new Regex(@"\A<@!?([1-9][0-9]{14,19})>\z");
@@ -90,6 +100,7 @@ namespace RoMulti
             lock (_dedupeLock)
             {
                 _pidStates.Clear();
+                _serverSentRecently.Clear();
             }
         }
 
@@ -364,7 +375,7 @@ namespace RoMulti
                     if (!existingKeys.ContainsKey(canonical) && !grouped.ContainsKey(canonical))
                         canonical = existingKeys.Keys.Concat(grouped.Keys).FirstOrDefault(key =>
                             key.StartsWith(UnknownPrefix, StringComparison.OrdinalIgnoreCase) &&
-                            EventCatalog.SameBroadcastText(key.Substring(UnknownPrefix.Length), body)) ?? canonical;
+                            EventCatalog.SameUnknownBroadcast(key.Substring(UnknownPrefix.Length), body)) ?? canonical;
                 }
 
                 List<MatchedEvent> list;
@@ -574,7 +585,7 @@ namespace RoMulti
                         if ((now - kv.Value) > DedupeCooldown) continue;
 
                         string oldBody = kv.Key.Substring(pidPrefix.Length).Trim();
-                        if (AreSimilarUnknownTexts(oldBody, newBody))
+                        if (AreSimilarUnknownTexts(oldBody, newBody) || EventCatalog.SameUnknownBroadcast(oldBody, newBody))
                         {
                             matchedKey = kv.Key;
                             break;
@@ -590,6 +601,76 @@ namespace RoMulti
                 if (recordIfNew)
                 {
                     _sentRecently[fullKey] = now;
+                }
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Cross-PID same-server dedupe (90s window, active ONLY when jobId is non-empty and sourcePid differs).
+        /// Suppresses a second Roblox instance in the exact same JobId from double-posting the same event,
+        /// while leaving different servers (e.g. 1st Kingdom vs Jungle) AND genuine 2nd spawns on the same PID untouched.
+        /// </summary>
+        public bool IsDuplicateOnSameServerAndRecord(
+            string jobId,
+            string dedupeKey,
+            int sourcePid,
+            bool recordIfNew,
+            DateTime? nowOverrideUtc = null)
+        {
+            if (string.IsNullOrWhiteSpace(jobId) || string.IsNullOrWhiteSpace(dedupeKey))
+                return false;
+
+            string cleanJob = jobId.Trim();
+            string cleanKey = dedupeKey.Trim();
+            string serverKey = cleanJob + "|" + cleanKey;
+            DateTime now = nowOverrideUtc.HasValue ? nowOverrideUtc.Value : DateTime.UtcNow;
+
+            lock (_dedupeLock)
+            {
+                var expired = new List<string>();
+                foreach (var kv in _serverSentRecently)
+                {
+                    if ((now - kv.Value.SentAtUtc) > CrossPidServerDedupeWindow)
+                        expired.Add(kv.Key);
+                }
+                foreach (string k in expired)
+                    _serverSentRecently.Remove(k);
+
+                ServerSentEntry existing;
+                if (_serverSentRecently.TryGetValue(serverKey, out existing) &&
+                    (now - existing.SentAtUtc) <= CrossPidServerDedupeWindow)
+                {
+                    if (existing.SourcePid != sourcePid)
+                        return true;
+
+                    if (recordIfNew)
+                        existing.SentAtUtc = now;
+                    return false;
+                }
+
+                if (cleanKey.StartsWith(UnknownPrefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    string jobUnkPrefix = cleanJob + "|" + UnknownPrefix;
+                    string newBody = cleanKey.Substring(UnknownPrefix.Length).Trim();
+                    foreach (var kv in _serverSentRecently)
+                    {
+                        if (!kv.Key.StartsWith(jobUnkPrefix, StringComparison.OrdinalIgnoreCase)) continue;
+                        if ((now - kv.Value.SentAtUtc) > CrossPidServerDedupeWindow) continue;
+                        if (kv.Value.SourcePid == sourcePid) continue;
+                        string oldBody = kv.Key.Substring(jobUnkPrefix.Length).Trim();
+                        if (EventCatalog.SameUnknownBroadcast(oldBody, newBody))
+                            return true;
+                    }
+                }
+
+                if (recordIfNew)
+                {
+                    _serverSentRecently[serverKey] = new ServerSentEntry
+                    {
+                        SourcePid = sourcePid,
+                        SentAtUtc = now
+                    };
                 }
                 return false;
             }
@@ -835,56 +916,162 @@ namespace RoMulti
             return await PostPayloadAsync(webhookUrl, payload, null);
         }
 
+        internal static bool ShouldRetryHttpStatus(int statusCode)
+        {
+            return statusCode == 429 || (statusCode >= 500 && statusCode <= 599);
+        }
+
+        internal static int ComputeRetryDelayMs(int attempt, TimeSpan? retryAfter)
+        {
+            if (retryAfter.HasValue)
+            {
+                double rawMs = retryAfter.Value.TotalMilliseconds;
+                if (!double.IsNaN(rawMs) && !double.IsInfinity(rawMs))
+                {
+                    if (rawMs < 500.0) return 500;
+                    if (rawMs > 5000.0) return 5000;
+                    return (int)Math.Round(rawMs);
+                }
+            }
+            return attempt <= 1 ? 1000 : 2500;
+        }
+
+        private static TimeSpan? ExtractRetryAfter(HttpResponseMessage response)
+        {
+            if (response == null || response.Headers == null) return null;
+            if (response.Headers.RetryAfter != null)
+            {
+                if (response.Headers.RetryAfter.Delta.HasValue)
+                    return response.Headers.RetryAfter.Delta.Value;
+                if (response.Headers.RetryAfter.Date.HasValue)
+                    return response.Headers.RetryAfter.Date.Value - DateTimeOffset.UtcNow;
+            }
+            IEnumerable<string> rawValues;
+            if (response.Headers.TryGetValues("Retry-After", out rawValues))
+            {
+                foreach (string val in rawValues)
+                {
+                    double seconds;
+                    if (!string.IsNullOrWhiteSpace(val) &&
+                        double.TryParse(val.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out seconds) &&
+                        !double.IsNaN(seconds) && !double.IsInfinity(seconds))
+                    {
+                        if (seconds < 0.0) seconds = 0.0;
+                        if (seconds > 86400.0) seconds = 86400.0;
+                        return TimeSpan.FromSeconds(seconds);
+                    }
+                }
+            }
+            return null;
+        }
+
         private static async Task<DiscordSendResult> PostPayloadAsync(string webhookUrl, Dictionary<string, object> payload, byte[] pngAttachment)
         {
             var res = new DiscordSendResult();
+            string json;
             try
             {
                 var ser = new JavaScriptSerializer();
-                string json = ser.Serialize(payload);
-                HttpResponseMessage response;
-
-                if (pngAttachment != null && pngAttachment.Length > 0)
-                {
-                    using (var form = new MultipartFormDataContent())
-                    {
-                        var jsonContent = new StringContent(json, Encoding.UTF8, "application/json");
-                        form.Add(jsonContent, "payload_json");
-
-                        var fileContent = new ByteArrayContent(pngAttachment);
-                        fileContent.Headers.ContentType = new MediaTypeHeaderValue("image/png");
-                        form.Add(fileContent, "files[0]", "chat.png");
-
-                        response = await Http.PostAsync(webhookUrl.Trim(), form);
-                    }
-                }
-                else
-                {
-                    using (var body = new StringContent(json, Encoding.UTF8, "application/json"))
-                    {
-                        response = await Http.PostAsync(webhookUrl.Trim(), body);
-                    }
-                }
-
-                using (response)
-                {
-                    if (response.IsSuccessStatusCode)
-                    {
-                        res.Sent = true;
-                        res.Message = "Delivered to Discord (" + (int)response.StatusCode + ").";
-                    }
-                    else
-                    {
-                        string respBody = await response.Content.ReadAsStringAsync();
-                        res.Sent = false;
-                        res.Message = string.Format("Discord HTTP {0}: {1}", (int)response.StatusCode, Truncate(respBody, 160));
-                    }
-                }
+                json = ser.Serialize(payload);
             }
             catch (Exception ex)
             {
                 res.Sent = false;
-                res.Message = "Webhook request error: " + ex.Message;
+                res.Message = "Webhook payload serialization error: " + ex.Message;
+                return res;
+            }
+
+            string targetUrl = webhookUrl.Trim();
+            for (int attempt = 1; attempt <= MaxWebhookAttempts; attempt++)
+            {
+                int retryDelayMs = -1;
+                try
+                {
+                    HttpResponseMessage response;
+                    if (pngAttachment != null && pngAttachment.Length > 0)
+                    {
+                        using (var form = new MultipartFormDataContent())
+                        {
+                            var jsonContent = new StringContent(json, Encoding.UTF8, "application/json");
+                            form.Add(jsonContent, "payload_json");
+
+                            var fileContent = new ByteArrayContent(pngAttachment);
+                            fileContent.Headers.ContentType = new MediaTypeHeaderValue("image/png");
+                            form.Add(fileContent, "files[0]", "chat.png");
+
+                            response = await Http.PostAsync(targetUrl, form);
+                        }
+                    }
+                    else
+                    {
+                        using (var body = new StringContent(json, Encoding.UTF8, "application/json"))
+                        {
+                            response = await Http.PostAsync(targetUrl, body);
+                        }
+                    }
+
+                    using (response)
+                    {
+                        if (response.IsSuccessStatusCode)
+                        {
+                            res.Sent = true;
+                            res.Message = attempt > 1
+                                ? string.Format("Delivered to Discord ({0}, attempt {1}).", (int)response.StatusCode, attempt)
+                                : "Delivered to Discord (" + (int)response.StatusCode + ").";
+                            return res;
+                        }
+
+                        int statusCode = (int)response.StatusCode;
+                        string respBody = await response.Content.ReadAsStringAsync();
+                        if (attempt < MaxWebhookAttempts && ShouldRetryHttpStatus(statusCode))
+                        {
+                            retryDelayMs = ComputeRetryDelayMs(attempt, ExtractRetryAfter(response));
+                        }
+                        else
+                        {
+                            res.Sent = false;
+                            res.Message = string.Format("Discord HTTP {0}: {1}", statusCode, Truncate(respBody, 160));
+                            return res;
+                        }
+                    }
+                }
+                catch (HttpRequestException ex)
+                {
+                    if (attempt < MaxWebhookAttempts)
+                    {
+                        retryDelayMs = ComputeRetryDelayMs(attempt, null);
+                    }
+                    else
+                    {
+                        res.Sent = false;
+                        res.Message = "Webhook request error: " + ex.Message;
+                        return res;
+                    }
+                }
+                catch (TaskCanceledException ex)
+                {
+                    if (attempt < MaxWebhookAttempts)
+                    {
+                        retryDelayMs = ComputeRetryDelayMs(attempt, null);
+                    }
+                    else
+                    {
+                        res.Sent = false;
+                        res.Message = "Webhook request timeout: " + ex.Message;
+                        return res;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    res.Sent = false;
+                    res.Message = "Webhook request error: " + ex.Message;
+                    return res;
+                }
+
+                if (retryDelayMs >= 0)
+                {
+                    await Task.Delay(retryDelayMs);
+                }
             }
 
             return res;

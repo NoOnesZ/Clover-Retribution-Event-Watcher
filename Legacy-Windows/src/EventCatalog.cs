@@ -648,6 +648,8 @@ namespace RoMulti
                     new[] { "surfaced", "southern" },
                     new[] { "southern", "waters" },
                     new[] { "mammoth" },
+                    new[] { "mossback" },
+                    new[] { "alpha", "mossback" },
                     new[] { "black", "backed" },
                     new[] { "shaking", "western" },
                     new[] { "shakin", "western" },
@@ -718,14 +720,24 @@ namespace RoMulti
         private static readonly string[] DespawnIndicators = new[]
         {
             "vanish", "eanish", "vanished", "despawn", "disappear", "dissipat", "subsid", "fade", "fading",
-            "defeat", "defeated", "slain", "was killed", "has died", "has fallen", "falls to",
+            "defeat", "defeated", "slain", "was killed", "has died", "has fallen", "fallen", "falls to",
+            "perished", "silenced", "vanquished", "crumbles", "crumbled", "calms", "has settled", "is settled", "settled down",
             "leaving only", "leaving on", "leaving ont", "in his wake", "his wake", "h is wake",
             "in its wake", "its wake", "whispers in", "beneath the dunes",
             "vowing revenge", "vowing", "revenge", "misteriously", "mysteriously",
             "retreat", "depart", "banish", "cease", "collaps", "dissolv",
             "reced", "sinks back", "returns to the", "returned to", "left the",
             "has ended", "event ended", "has closed", "portal closed", "rift closed", "closes",
-            "no longer", "calm returns", "peace returns", "overcome", "extinguished", "has fled", "expired"
+            "no longer", "calm returns", "peace returns", "overcome", "extinguished", "has fled", "was fled", "fled the", "expired"
+        };
+
+        private static readonly string[] GluedDespawnCompounds = new[]
+        {
+            "hasfallen", "wasfallen", "beendefeated", "wasdefeated", "hasvanished", "wasvanished",
+            "hasdespawned", "hasdisappeared", "hassubsided", "hasended", "hasclosed",
+            "wasslain", "beenslain", "hasperished", "fadesaway", "fadinginto",
+            "leavingonly", "leavingont", "inhiswake", "initswake", "vowingrevenge",
+            "cruciblecools", "orderisrestored", "releasesitsgrip", "darkreign"
         };
 
         private static readonly string[] FuzzyDespawnWords = new[]
@@ -739,6 +751,7 @@ namespace RoMulti
             "dissipate", "dissipates", "dissipated",
             "subside", "subsides", "subsided",
             "banish", "banished",
+            "fallen", "perished", "vanquished",
             "extinguished", "revenge"
         };
 
@@ -751,6 +764,12 @@ namespace RoMulti
             foreach (string indicator in DespawnIndicators)
             {
                 if (normalizedLine.IndexOf(indicator, StringComparison.OrdinalIgnoreCase) >= 0)
+                    return true;
+            }
+            string compact = IntentSkeleton(normalizedLine).Replace(" ", "");
+            for (int i = 0; i < GluedDespawnCompounds.Length; i++)
+            {
+                if (compact.IndexOf(GluedDespawnCompounds[i], StringComparison.OrdinalIgnoreCase) >= 0)
                     return true;
             }
             string[] words = normalizedLine.Split(' ');
@@ -1027,7 +1046,7 @@ namespace RoMulti
                 if (string.IsNullOrWhiteSpace(rawInput)) continue;
                 string line = rawInput.Trim();
                 string lineNorm = NormalizeForMatch(line);
-                bool startsNewTag = AnyChatTagStartRegex.IsMatch(line);
+                bool startsNewTag = AnyChatTagStartRegex.IsMatch(line) || EventTagRegex.IsMatch(line);
                 bool isTipOrHudOrPlayer = IsNonEventTipOrSystem(line, lineNorm) || IsHudOrHotbarLine(line, lineNorm) || IsPlayerChatLine(line);
 
                 if (!startsNewTag && !isTipOrHudOrPlayer && stitchedMessages.Count > 0)
@@ -1038,13 +1057,13 @@ namespace RoMulti
                     bool prevIsNonEvent = NonEventPrefixRegex.IsMatch(prev);
                     int maxCont = prevIsNonEvent ? 2 : 1; // Event broadcasts wrap at most 1 continuation line
 
-                    if (AnyChatTagStartRegex.IsMatch(prev) &&
+                    if ((AnyChatTagStartRegex.IsMatch(prev) || EventTagRegex.IsMatch(prev)) &&
                         stitchedContinuations[prevIdx] < maxCont &&
                         prev.Length < 105 &&
                         !EndsWithTerminalPunctuation(prev) &&
                         !EndsWithCompleteBroadcastPhrase(prevNorm))
                     {
-                        EventRule lineRule = string.IsNullOrEmpty(lineNorm) ? null : FindNamedRule(lineNorm);
+                        EventRule lineRule = string.IsNullOrEmpty(lineNorm) ? null : FindNamedRule(lineNorm, tagged: false);
                         bool canStitch = true;
 
                         if (lineRule != null)
@@ -1056,7 +1075,9 @@ namespace RoMulti
                             }
                             else
                             {
-                                EventRule prevRule = string.IsNullOrEmpty(prevNorm) ? null : FindNamedRule(prevNorm);
+                                EventRule prevRule = string.IsNullOrEmpty(prevNorm)
+                                    ? null
+                                    : FindNamedRule(prevNorm, tagged: EventTagRegex.IsMatch(prev));
                                 if (prevRule != null && (prevRule.Id != lineRule.Id || HasHighWordOverlap(prevNorm, lineNorm)))
                                 {
                                     // Either a different event, or a repeated copy of the same event with dropped [Event] tag
@@ -1194,6 +1215,36 @@ namespace RoMulti
             return results;
         }
 
+        private static bool IsPriorityTaglessRule(EventRule rule)
+        {
+            return rule.Id == "devil_rift" || rule.Id == "spirit_rift" ||
+                rule.Id == "wind_wisp" || rule.Id == "blood_wisp" || rule.Id == "light_wisp" || rule.Id == "spirit_wisp";
+        }
+
+        private static bool IsPriorityWispRule(EventRule rule)
+        {
+            return rule.Id == "wind_wisp" || rule.Id == "blood_wisp" || rule.Id == "light_wisp" || rule.Id == "spirit_wisp";
+        }
+
+        private static bool AllowsTaglessRule(EventRule rule, string normalizedLine, string[] words, string compact)
+        {
+            if (!IsPriorityTaglessRule(rule)) return false;
+            if (rule.Id == "devil_rift") return IsDevilRiftFuzzyBroadcast(normalizedLine, false);
+            if (rule.Id == "spirit_rift")
+            {
+                if (!StartsNearRift(words, compact)) return false;
+                for (int i = 0; i < words.Length; i++)
+                {
+                    string w = words[i];
+                    if (w == "kingdom" || w == "felt" || w == "throughout" || w == "toward" || NearOcrWord(w, "kingdom"))
+                        return true;
+                }
+                return compact.Contains("kingdom") || compact.Contains("throughout");
+            }
+            if (IsPriorityWispRule(rule)) return StartsNearPriorityWisp(words, compact);
+            return false;
+        }
+
         private static EventRule FindNamedRule(string normalizedLine, bool tagged = false)
         {
             if (GiantSeal.IsMatch(normalizedLine))
@@ -1205,34 +1256,79 @@ namespace RoMulti
                 var star = FindStarRule(normalizedLine);
                 if (star != null) return star;
             }
+
+            string[] words = normalizedLine.Split(' ');
+            string compact = IntentSkeleton(normalizedLine).Replace(" ", "");
+
+            // Tier 1: Exact token-group match (tag-less restricted strictly to guarded priority rules)
             foreach (var rule in Rules)
             {
                 if (rule.IsCatchAll) continue;
+                if (!tagged && !AllowsTaglessRule(rule, normalizedLine, words, compact)) continue;
                 if (MatchesRule(normalizedLine, rule))
                     return rule;
             }
-            string[] words = normalizedLine.Split(' ');
-            if (!tagged && !StartsNearRift(words) && !StartsNearPriorityWisp(words)) return null;
-            EventRule candidate = null;
+
+            if (!tagged && !StartsNearRift(words, compact) && !StartsNearPriorityWisp(words, compact))
+                return null;
+
+            // Tier 2: Unique single-word typo match (strict ambiguity short-circuit -> null)
+            EventRule tier2Candidate = null;
+            int tier2Count = 0;
             foreach (var rule in Rules)
             {
-                bool priorityTagless = rule.Id == "devil_rift" || rule.Id == "spirit_rift" ||
-                    rule.Id == "wind_wisp" || rule.Id == "blood_wisp" || rule.Id == "light_wisp" || rule.Id == "spirit_wisp";
-                if (rule.IsCatchAll || (!tagged && !priorityTagless) || !MatchesRuleTypo(words, rule)) continue;
-                if (candidate != null) return null;
-                candidate = rule;
+                if (rule.IsCatchAll) continue;
+                if (!tagged && !AllowsTaglessRule(rule, normalizedLine, words, compact)) continue;
+                if (!MatchesRuleTypo(words, rule)) continue;
+                tier2Candidate = rule;
+                tier2Count++;
+                if (tier2Count >= 2) return null;
             }
-            return candidate;
+            if (tier2Count == 1) return tier2Candidate;
+
+            // Tier 3.1: Space-glued distinctive multi-word anchor match (strict ambiguity short-circuit -> null)
+            EventRule gluedCandidate = null;
+            int gluedCount = 0;
+            foreach (var rule in Rules)
+            {
+                if (rule.IsCatchAll) continue;
+                if (!tagged && !AllowsTaglessRule(rule, normalizedLine, words, compact)) continue;
+                if (!MatchesRuleGlued(compact, rule)) continue;
+                gluedCandidate = rule;
+                gluedCount++;
+                if (gluedCount >= 2) return null;
+            }
+            if (gluedCount == 1) return gluedCandidate;
+
+            // Tier 3.2: Multi-typo token-group intent match (strict uniqueness -> null if 2+ rules qualify)
+            EventRule intentCandidate = null;
+            int intentCount = 0;
+            foreach (var rule in Rules)
+            {
+                if (rule.IsCatchAll) continue;
+                if (!tagged && !AllowsTaglessRule(rule, normalizedLine, words, compact)) continue;
+                if (!MatchesRuleIntentMultiTypo(words, rule)) continue;
+                intentCandidate = rule;
+                intentCount++;
+                if (intentCount >= 2) return null;
+            }
+            return intentCount == 1 ? intentCandidate : null;
         }
 
-        private static bool StartsNearPriorityWisp(string[] words)
+        private static bool StartsNearPriorityWisp(string[] words, string compact)
         {
+            if (compact.StartsWith("windwisp") || compact.StartsWith("awindwisp") || compact.StartsWith("thewindwisp") ||
+                compact.StartsWith("bloodwisp") || compact.StartsWith("abloodwisp") || compact.StartsWith("thebloodwisp") ||
+                compact.StartsWith("lightwisp") || compact.StartsWith("alightwisp") || compact.StartsWith("thelightwisp") ||
+                compact.StartsWith("spiritwisp") || compact.StartsWith("aspiritwisp") || compact.StartsWith("thespiritwisp"))
+                return true;
+
             int start = (words.Length > 0 && (words[0] == "a" || words[0] == "the")) ? 1 : 0;
             if (words.Length - start < 2) return false;
-            return NearOpening(words, start, "wind", "wisp") ||
-                NearOpening(words, start, "blood", "wisp") ||
-                NearOpening(words, start, "light", "wisp") ||
-                NearOpening(words, start, "spirit", "wisp");
+            return NearOpeningBoth(words, start, "wind", "wisp") ||
+                NearOpeningBoth(words, start, "blood", "wisp") ||
+                NearOpeningBoth(words, start, "light", "wisp") ||
+                NearOpeningBoth(words, start, "spirit", "wisp");
         }
 
         private static EventRule FindStarRule(string normalizedLine)
@@ -1253,19 +1349,25 @@ namespace RoMulti
             return candidate;
         }
 
-        private static bool StartsNearRift(string[] words)
+        private static bool StartsNearRift(string[] words, string compact)
         {
-            int start = words[0] == "a" ? 1 : 0;
+            if (compact.StartsWith("somethingfeels") || compact.StartsWith("asomethingfeels") ||
+                compact.StartsWith("strangeenergy") || compact.StartsWith("astrangeenergy") ||
+                compact.StartsWith("mysteriousenergy") || compact.StartsWith("amysteriousenergy"))
+                return true;
+
+            int start = (words.Length > 0 && (words[0] == "a" || words[0] == "the")) ? 1 : 0;
             if (words.Length - start < 2) return false;
-            return NearOpening(words, start, "something", "feels") ||
-                NearOpening(words, start, "strange", "energy") ||
-                NearOpening(words, start, "mysterious", "energy");
+            return NearOpeningBoth(words, start, "something", "feels") ||
+                NearOpeningBoth(words, start, "strange", "energy") ||
+                NearOpeningBoth(words, start, "mysterious", "energy");
         }
 
-        private static bool NearOpening(string[] words, int start, string first, string second)
+        private static bool NearOpeningBoth(string[] words, int start, string first, string second)
         {
-            return (words[start] == first && NearOcrWord(words[start + 1], second)) ||
-                (words[start + 1] == second && NearOcrWord(words[start], first));
+            bool firstOk = words[start] == first || NearOcrWord(words[start], first);
+            bool secondOk = words[start + 1] == second || NearOcrWord(words[start + 1], second);
+            return firstOk && secondOk;
         }
 
         private static void AddMatchedRule(
@@ -1339,6 +1441,138 @@ namespace RoMulti
                 if (++changed > 1 || !NearOcrWord(a[i], b[i])) return false;
             }
             return true;
+        }
+
+        internal static bool SameUnknownBroadcast(string first, string second)
+        {
+            if (string.IsNullOrEmpty(first) || string.IsNullOrEmpty(second)) return false;
+            if (SameBroadcastText(first, second)) return true;
+            string a = IntentSkeleton(first.ToLowerInvariant()).Replace(" ", "");
+            string b = IntentSkeleton(second.ToLowerInvariant()).Replace(" ", "");
+            int minLen = Math.Min(a.Length, b.Length);
+            int maxLen = Math.Max(a.Length, b.Length);
+            if (minLen < 18 || (double)minLen / maxLen < 0.65) return false;
+            return BigramDice(a, b) >= 0.62;
+        }
+
+        private static double BigramDice(string a, string b)
+        {
+            if (a.Length < 2 || b.Length < 2) return 0.0;
+            var countsA = new Dictionary<string, int>(StringComparer.Ordinal);
+            int totalA = a.Length - 1;
+            for (int i = 0; i < totalA; i++)
+            {
+                string bg = a.Substring(i, 2);
+                int c;
+                countsA.TryGetValue(bg, out c);
+                countsA[bg] = c + 1;
+            }
+            int intersection = 0;
+            int totalB = b.Length - 1;
+            for (int i = 0; i < totalB; i++)
+            {
+                string bg = b.Substring(i, 2);
+                int c;
+                if (countsA.TryGetValue(bg, out c) && c > 0)
+                {
+                    intersection++;
+                    countsA[bg] = c - 1;
+                }
+            }
+            return (2.0 * intersection) / (totalA + totalB);
+        }
+
+        private static bool MatchesRuleGlued(string compactLine, EventRule rule)
+        {
+            if (string.IsNullOrEmpty(compactLine) || rule.TokenGroups == null) return false;
+            foreach (string[] group in rule.TokenGroups)
+            {
+                if (group.Length < 2) continue;
+                string joined = IntentSkeleton(string.Join("", group));
+                if (joined.Length < 8) continue;
+                if (compactLine.IndexOf(joined, StringComparison.OrdinalIgnoreCase) >= 0)
+                    return true;
+            }
+            return false;
+        }
+
+        private static bool MatchesRuleIntentMultiTypo(string[] words, EventRule rule)
+        {
+            if (rule.TokenGroups == null || words == null || words.Length == 0) return false;
+            string[] wordSks = new string[words.Length];
+            for (int i = 0; i < words.Length; i++)
+                wordSks[i] = IntentSkeleton(words[i]);
+
+            foreach (string[] group in rule.TokenGroups)
+            {
+                if (group.Length < 2) continue;
+                int substantialTokens = 0;
+                for (int t = 0; t < group.Length; t++)
+                {
+                    if (IntentSkeleton(group[t]).Length >= 4) substantialTokens++;
+                }
+                if (group.Length == 2 && substantialTokens < 2) continue;
+
+                bool allMatched = true;
+                bool strongAnchor = false;
+                for (int t = 0; t < group.Length; t++)
+                {
+                    string tokSk = IntentSkeleton(group[t]);
+                    int maxDist = tokSk.Length >= 8 ? 2 : (tokSk.Length >= 4 ? 1 : 0);
+                    int bestDist = int.MaxValue;
+                    for (int wi = 0; wi < wordSks.Length; wi++)
+                    {
+                        string wSk = wordSks[wi];
+                        if (wSk == tokSk)
+                        {
+                            bestDist = 0;
+                            break;
+                        }
+                        if (tokSk.Length >= 5 && wSk.Length > tokSk.Length && wSk.IndexOf(tokSk, StringComparison.Ordinal) >= 0)
+                        {
+                            if (bestDist > 1) bestDist = 1;
+                            continue;
+                        }
+                        if (maxDist >= 1 && EditDistanceAtMost(wSk, tokSk, 1))
+                        {
+                            if (bestDist > 1) bestDist = 1;
+                        }
+                        else if (maxDist >= 2 && bestDist > 2 && EditDistanceAtMost(wSk, tokSk, 2))
+                        {
+                            bestDist = 2;
+                        }
+                    }
+                    if (bestDist > maxDist)
+                    {
+                        allMatched = false;
+                        break;
+                    }
+                    if (tokSk.Length >= 4 && bestDist <= 1)
+                        strongAnchor = true;
+                }
+                if (allMatched && (strongAnchor || group.Length >= 3))
+                    return true;
+            }
+            return false;
+        }
+
+        internal static string IntentSkeleton(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return "";
+            string s = text.Replace("rn", "m").Replace("nn", "m").Replace("nu", "m")
+                .Replace("vv", "w").Replace("cl", "d");
+            var sb = new StringBuilder(s.Length);
+            for (int i = 0; i < s.Length; i++)
+            {
+                char c = s[i];
+                if (c == '0') sb.Append('o');
+                else if (c == '1') sb.Append('l');
+                else if (c == '3') sb.Append('e');
+                else if (c == '4') sb.Append('a');
+                else if (c == '5') sb.Append('s');
+                else sb.Append(c);
+            }
+            return sb.ToString();
         }
 
         private static bool MatchesRuleTypo(string[] words, EventRule rule)

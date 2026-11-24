@@ -74,8 +74,9 @@ Setiap kali event terdeteksi pada salah satu akun `AFK SAVER`, RoMulti mengirim 
 - **Quick Join URI:** link `roblox://experiences/start?placeId=...&gameInstanceId=...` untuk langsung melompat ke server tersebut.
 - **Lampiran Gambar (`chat.png`):** potongan tangkapan layar kotak chat untuk verifikasi instan.
 
-### Anti-Spam Cooldown
-RoMulti otomatis menahan pesan duplikat untuk `(PID, Event)` yang sama selama **5 menit**, sehingga chat yang masih terpampang di layar pada scan berikutnya tidak akan mengirim spam berulang ke Discord.
+### Anti-Spam Dedupe & Auto-Retry
+- **Timeline Memory (30 menit) & Cross-PID Same-`JobId` Dedupe (90 detik):** RoMulti otomatis membedakan pesan chat lama vs spawn event baru di bawah chat, serta menahan duplikat lintas-instance ketika dua akun berada di server (`JobId`) yang sama — sementara dua akun di server berbeda (*1st Kingdom* + *Jungle*) atau spawn kedua di akun yang sama tetap terkirim normal.
+- **Webhook Auto-Retry:** Jika terjadi error sementara (`HTTP 429`, `5xx`, atau timeout jaringan), RoMulti otomatis mencoba ulang hingga **3×** (menghormati header `Retry-After`) tanpa mengulang error permanen (`400`/`401`/`403`/`404`).
 
 ---
 

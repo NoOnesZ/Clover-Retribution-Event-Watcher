@@ -95,32 +95,89 @@ final class DiscordWebhook {
         return payload;
     }
 
+    private static final int MAX_ATTEMPTS = 3;
+
+    static boolean shouldRetryStatus(int code) {
+        return code == 429 || (code >= 500 && code <= 599);
+    }
+
+    static long computeRetryDelayMs(int attempt, String retryAfterHeader) {
+        if (retryAfterHeader != null) {
+            String trimmed = retryAfterHeader.trim();
+            if (!trimmed.isEmpty()) {
+                try {
+                    double seconds = Double.parseDouble(trimmed);
+                    if (!Double.isNaN(seconds) && !Double.isInfinite(seconds)) {
+                        long ms = Math.round(seconds * 1000.0);
+                        return Math.max(500L, Math.min(5000L, ms));
+                    }
+                } catch (NumberFormatException ignored) {
+                    // Fall back to default backoff schedule
+                }
+            }
+        }
+        return attempt <= 1 ? 1000L : 2500L;
+    }
+
+    private static void sleepBeforeRetry(long delayMs) throws InterruptedException {
+        if (Thread.currentThread().isInterrupted()) {
+            throw new InterruptedException("Webhook retry cancelled");
+        }
+        Thread.sleep(delayMs);
+    }
+
     private static void post(URI uri, JSONObject payload) throws Exception {
         byte[] bytes = payload.toString().getBytes(StandardCharsets.UTF_8);
+        URI target = URI.create(uri.toASCIIString() + "?wait=true");
 
-        HttpsURLConnection connection = (HttpsURLConnection) URI.create(uri.toASCIIString() + "?wait=true")
-            .toURL().openConnection();
-        try {
-            connection.setInstanceFollowRedirects(false);
-            connection.setConnectTimeout(7000);
-            connection.setReadTimeout(7000);
-            connection.setDoOutput(true);
-            connection.setRequestMethod("POST");
-            connection.setRequestProperty("Content-Type", "application/json; charset=utf-8");
-            connection.setFixedLengthStreamingMode(bytes.length);
-            try (OutputStream output = connection.getOutputStream()) {
-                output.write(bytes);
+        for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+            HttpsURLConnection connection = null;
+            try {
+                connection = (HttpsURLConnection) target.toURL().openConnection();
+                connection.setInstanceFollowRedirects(false);
+                connection.setConnectTimeout(7000);
+                connection.setReadTimeout(7000);
+                connection.setDoOutput(true);
+                connection.setRequestMethod("POST");
+                connection.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+                connection.setFixedLengthStreamingMode(bytes.length);
+                try (OutputStream output = connection.getOutputStream()) {
+                    output.write(bytes);
+                }
+                int code = connection.getResponseCode();
+                if (code >= 200 && code < 300) return;
+                String retryAfter = connection.getHeaderField("Retry-After");
+                if (attempt < MAX_ATTEMPTS && shouldRetryStatus(code)) {
+                    connection.disconnect();
+                    connection = null;
+                    sleepBeforeRetry(computeRetryDelayMs(attempt, retryAfter));
+                    continue;
+                }
+                throw new HttpFailure(code);
+            } catch (HttpFailure failure) {
+                throw failure;
+            } catch (IOException networkError) {
+                if (attempt < MAX_ATTEMPTS) {
+                    if (connection != null) {
+                        connection.disconnect();
+                        connection = null;
+                    }
+                    sleepBeforeRetry(computeRetryDelayMs(attempt, null));
+                    continue;
+                }
+                throw networkError;
+            } finally {
+                if (connection != null) connection.disconnect();
             }
-            int code = connection.getResponseCode();
-            if (code < 200 || code >= 300) throw new HttpFailure(code);
-        } finally {
-            connection.disconnect();
         }
     }
 
     static String explainFailure(Exception error) {
         if (error instanceof HttpFailure) {
             return "Discord menolak webhook (HTTP " + ((HttpFailure) error).code + ").";
+        }
+        if (error instanceof InterruptedException) {
+            return "Pengiriman Discord dibatalkan.";
         }
         return "Discord tidak bisa dihubungi. Periksa koneksi.";
     }

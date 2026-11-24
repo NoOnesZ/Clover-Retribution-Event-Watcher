@@ -93,7 +93,7 @@ public final class MainActivity extends Activity {
         TextView title = text("Clover Event Detector", 28, TEXT);
         title.setTypeface(null, Typeface.BOLD);
         add(page, title, 0);
-        add(page, text("RoMulti · Android", 15, SECONDARY), 4);
+        add(page, text("RoMulti · Android v" + appVersionName(), 15, SECONDARY), 4);
 
         LinearLayout capture = card();
         add(page, capture, 20);
@@ -429,5 +429,18 @@ public final class MainActivity extends Activity {
 
     private int dp(int value) {
         return Math.round(value * getResources().getDisplayMetrics().density);
+    }
+
+    @SuppressWarnings("deprecation")
+    private String appVersionName() {
+        try {
+            PackageManager pm = getPackageManager();
+            String name = Build.VERSION.SDK_INT >= 33
+                ? pm.getPackageInfo(getPackageName(), PackageManager.PackageInfoFlags.of(0)).versionName
+                : pm.getPackageInfo(getPackageName(), 0).versionName;
+            return (name != null && !name.trim().isEmpty()) ? name.trim() : "1.4.0";
+        } catch (Exception ignored) {
+            return "1.4.0";
+        }
     }
 }
