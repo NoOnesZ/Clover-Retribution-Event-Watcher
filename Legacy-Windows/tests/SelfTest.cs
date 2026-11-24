@@ -1177,13 +1177,18 @@ namespace RoMulti
                 return false;
             }
 
-            // Priority Spirit Rift + color-coded Priority Wisps (Wind=Green, Blood=Red, Light=Yellow)
+            // Priority Spirit Rift + color-coded Priority Wisps (Wind=Green, Blood=Red, Radiant/Light=Yellow)
             var priorityChecks = new[]
             {
                 Tuple.Create("[Event] A strange energy is felt throughout the kingdom", "spirit_rift", 0xF59E0B),
                 Tuple.Create("[Event] A wind wisp stirs the leaves somewhere in", "wind_wisp", 0x22C55E),
                 Tuple.Create("[Event] A blood wisp has appeared across the grasslands", "blood_wisp", 0xEF4444),
-                Tuple.Create("[Event] A light wisp has appeared across the grasslands", "light_wisp", 0xF59E0B)
+                Tuple.Create("[Event] A light wisp has appeared across the grasslands", "light_wisp", 0xF59E0B),
+                Tuple.Create("[Event] A radiant wisp drifts between the jungle canopy", "light_wisp", 0xF59E0B),
+                Tuple.Create("[Event] A radiant wisp drifts across the kingdom", "light_wisp", 0xF59E0B),
+                Tuple.Create("A radiant wisp drifts between the jungle canopy", "light_wisp", 0xF59E0B),
+                Tuple.Create("A rad1ant w15p drifts across the grasslands", "light_wisp", 0xF59E0B),
+                Tuple.Create("A radiantwisp drifts between the jungle canopy", "light_wisp", 0xF59E0B)
             };
             foreach (var chk in priorityChecks)
             {
@@ -1437,7 +1442,7 @@ namespace RoMulti
                 DiscordNotifier.ComputeRetryDelayMs(1, TimeSpan.FromSeconds(1.8)) != 1800 ||
                 DiscordNotifier.ComputeRetryDelayMs(1, TimeSpan.FromSeconds(30)) != 5000 ||
                 DiscordNotifier.ComputeRetryDelayMs(1, TimeSpan.FromDays(40000)) != 5000 ||
-                MainWindow.AppVersion != "v1.4.1")
+                MainWindow.AppVersion != "v1.4.2")
             {
                 Console.WriteLine("FAIL T3-4b: DiscordNotifier retry delay clamping or MainWindow.AppVersion mismatch.");
                 return false;

@@ -187,6 +187,7 @@ final class EventMatcher {
         if (compact.startsWith("windwisp") || compact.startsWith("awindwisp") || compact.startsWith("thewindwisp")
                 || compact.startsWith("bloodwisp") || compact.startsWith("abloodwisp") || compact.startsWith("thebloodwisp")
                 || compact.startsWith("lightwisp") || compact.startsWith("alightwisp") || compact.startsWith("thelightwisp")
+                || compact.startsWith("radiantwisp") || compact.startsWith("aradiantwisp") || compact.startsWith("theradiantwisp")
                 || compact.startsWith("spiritwisp") || compact.startsWith("aspiritwisp") || compact.startsWith("thespiritwisp")) {
             return true;
         }
@@ -196,6 +197,7 @@ final class EventMatcher {
         return nearOpeningBoth(words, start, "wind", "wisp")
             || nearOpeningBoth(words, start, "blood", "wisp")
             || nearOpeningBoth(words, start, "light", "wisp")
+            || nearOpeningBoth(words, start, "radiant", "wisp")
             || nearOpeningBoth(words, start, "spirit", "wisp");
     }
 

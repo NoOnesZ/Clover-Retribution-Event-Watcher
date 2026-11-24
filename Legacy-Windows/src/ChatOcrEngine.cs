@@ -402,7 +402,8 @@ namespace RoMulti
                     t.IndexOf("mysterious energy", StringComparison.OrdinalIgnoreCase) >= 0 ||
                     t.IndexOf("wind wisp", StringComparison.OrdinalIgnoreCase) >= 0 ||
                     t.IndexOf("blood wisp", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                    t.IndexOf("light wisp", StringComparison.OrdinalIgnoreCase) >= 0)
+                    t.IndexOf("light wisp", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    t.IndexOf("radiant wisp", StringComparison.OrdinalIgnoreCase) >= 0)
                     return true;
             }
             return false;
@@ -602,6 +603,7 @@ namespace RoMulti
                    text.IndexOf("wind wisp", StringComparison.OrdinalIgnoreCase) >= 0 ||
                    text.IndexOf("blood wisp", StringComparison.OrdinalIgnoreCase) >= 0 ||
                    text.IndexOf("light wisp", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   text.IndexOf("radiant wisp", StringComparison.OrdinalIgnoreCase) >= 0 ||
                    text.IndexOf("unlock chat", StringComparison.OrdinalIgnoreCase) >= 0 ||
                    text.IndexOf("to chat click", StringComparison.OrdinalIgnoreCase) >= 0;
         }

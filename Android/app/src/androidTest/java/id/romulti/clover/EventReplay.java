@@ -226,7 +226,12 @@ final class EventReplay {
             { "[Event] A wind wisp stirs the leaves somewhere in", "wind_wisp", 0x22C55E },
             { "A wind wisp stirs the leaves somewhere in the grasslands", "wind_wisp", 0x22C55E },
             { "[Event] A blood wisp has appeared across the grasslands", "blood_wisp", 0xEF4444 },
-            { "[Event] A light wisp has appeared across the grasslands", "light_wisp", 0xF59E0B }
+            { "[Event] A light wisp has appeared across the grasslands", "light_wisp", 0xF59E0B },
+            { "[Event] A radiant wisp drifts between the jungle canopy", "light_wisp", 0xF59E0B },
+            { "[Event] A radiant wisp drifts across the kingdom", "light_wisp", 0xF59E0B },
+            { "A radiant wisp drifts between the jungle canopy", "light_wisp", 0xF59E0B },
+            { "A rad1ant w15p drifts across the grasslands", "light_wisp", 0xF59E0B },
+            { "A radiantwisp drifts between the jungle canopy", "light_wisp", 0xF59E0B }
         };
         for (Object[] sample : cases) {
             EventMatcher.Frame frame = EventMatcher.scan(Arrays.asList((String) sample[0]), false);

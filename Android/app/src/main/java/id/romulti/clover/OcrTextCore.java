@@ -557,7 +557,8 @@ final class OcrTextCore {
             || lower.contains("[raid")
             || lower.contains("something feels") || lower.contains("strange energy")
             || lower.contains("mysterious energy")
-            || lower.contains("wind wisp") || lower.contains("blood wisp") || lower.contains("light wisp")
+            || lower.contains("wind wisp") || lower.contains("blood wisp")
+            || lower.contains("light wisp") || lower.contains("radiant wisp")
             || lower.contains("unlock chat") || lower.contains("to chat click");
     }
 

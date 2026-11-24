@@ -281,13 +281,17 @@ namespace RoMulti
             new EventRule
             {
                 Id = "light_wisp",
-                DisplayName = "Light Wisp",
+                DisplayName = "Radiant Wisp (Light Wisp)",
                 Category = "Rare Wisp (Priority)",
-                Hint = "A light wisp has appeared across the grasslands (Yellow/Gold)",
+                Hint = "A radiant wisp drifts between the jungle canopy (Yellow/Gold)",
                 EmbedColor = 0xF59E0B,
                 DefaultLevel = EventAlertLevel.Ping,
                 TokenGroups = new[]
                 {
+                    new[] { "radiant", "wisp" },
+                    new[] { "radiant", "drifts" },
+                    new[] { "radiant", "appeared" },
+                    new[] { "drifts", "canopy" },
                     new[] { "light", "wisp" },
                     new[] { "light", "appeared" }
                 }
@@ -1330,6 +1334,7 @@ namespace RoMulti
             if (compact.StartsWith("windwisp") || compact.StartsWith("awindwisp") || compact.StartsWith("thewindwisp") ||
                 compact.StartsWith("bloodwisp") || compact.StartsWith("abloodwisp") || compact.StartsWith("thebloodwisp") ||
                 compact.StartsWith("lightwisp") || compact.StartsWith("alightwisp") || compact.StartsWith("thelightwisp") ||
+                compact.StartsWith("radiantwisp") || compact.StartsWith("aradiantwisp") || compact.StartsWith("theradiantwisp") ||
                 compact.StartsWith("spiritwisp") || compact.StartsWith("aspiritwisp") || compact.StartsWith("thespiritwisp"))
                 return true;
 
@@ -1338,6 +1343,7 @@ namespace RoMulti
             return NearOpeningBoth(words, start, "wind", "wisp") ||
                 NearOpeningBoth(words, start, "blood", "wisp") ||
                 NearOpeningBoth(words, start, "light", "wisp") ||
+                NearOpeningBoth(words, start, "radiant", "wisp") ||
                 NearOpeningBoth(words, start, "spirit", "wisp");
         }
 
