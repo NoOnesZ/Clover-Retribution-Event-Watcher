@@ -54,9 +54,9 @@ Di panel kanan tab **Event Watcher & Anti-AFK**, klik baris event mana saja untu
 
 | Level | Perilaku di Discord | Daftar Default di RoMulti |
 |---|---|---|
-| **`PING`** | Mengirim **mention** (`@everyone` / `<@USER_ID>`) + embed + screenshot chat | **Devil Rift** (`Something feels off...`, ungu)<br>**Spirit Rift** (`strange energy feel toward kingdom`, emas) |
-| **`NORMAL`** | Mengirim embed + screenshot chat **tanpa mention/ping** | **Khamsin: The Sand Sage**, **Void Wisp**, **Leak Event**, **Spirit Wisp**, **Strange Scientist**, **Guarded Rift**, **Corrupted Night**, **A Green Star**, **The Divine General**, **Prime Apex**, **1–7 Stars**, **Other `[Event]` Broadcast** *(Catch-All)* |
-| **`IGNORE`** | Tidak dikirim ke Discord | **Mana Wisp**, **Terra: The Bandit Lord**, **Grasslands Warlord**, **Wolf Hunter Craftsman**, **Devil Rumors**, **Devil Assault (Giant Demon)**, **Vampire Castle / Lord Lucius** |
+| **`PING`** | Mengirim **mention** (`@everyone` / `<@USER_ID>`) + embed + screenshot chat | **Devil Rift** (`Something feels off...`, ungu)<br>**Spirit Rift** (`A strange energy is felt throughout the kingdom`, kuning/emas)<br>**Wind Wisp** (hijau), **Blood Wisp** (merah), **Light Wisp** (kuning/emas), **Spirit Wisp** |
+| **`NORMAL`** | Mengirim embed + screenshot chat **tanpa mention/ping** | **Khamsin: The Sand Sage**, **Void Wisp**, **Leak Event**, **Strange Scientist**, **Guarded Rift**, **Corrupted Night**, **A Green Star**, **The Divine General**, **Prime Apex**, **1–7 Stars**, **Other `[Event]` Broadcast** *(Catch-All)* |
+| **`IGNORE`** | Tidak dikirim ke Discord | **Mana Wisp**, **Terra: The Bandit Lord**, **Grasslands Warlord**, **Wolf Hunter Craftsman**, **Devil Rumors**, **Devil Assault (Giant Demon)**, **Vampire Castle / Lord Lucius**, **Raid: Kaldris (Embersworn)**, **Primal Werewolf** |
 
 > [!TIP]
 > Aturan **Other `[Event]` Broadcast (Catch-All)** menangkap semua baris berawalan `[Event]` yang kalimatnya belum terdaftar, sehingga event baru dari update game tidak akan pernah terlewat.

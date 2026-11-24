@@ -21,6 +21,8 @@ final class EventReplay {
         verifyLongStars();
         verifyMutedGiantDemon();
         verifyMutedVampireCastle();
+        verifyMutedRaidsAndWerewolf();
+        verifyPriorityWispsAndSpiritRift();
         verifyLowResTagsAndNoise();
         EventHistory history = new EventHistory();
         expect(history, 0, "", TIP);
@@ -137,6 +139,52 @@ final class EventReplay {
         }
     }
 
+    private static void verifyMutedRaidsAndWerewolf() {
+        List<List<String>> cases = Arrays.asList(
+            Arrays.asList(
+                "[System] You've exited a safezone.",
+                "[Raid] The ember altar flares. Kaldris, the Embersworn, waits in the Ashen",
+                "Crucible for up to 5 people nearby."),
+            Arrays.asList("[Raid] Kaldris, the Embersworn, has been defeated. The crucible cools."),
+            Arrays.asList("[Event] The ember altar flares. Kaldris, the Embersworn, waits in the Ashen Crucible."),
+            Arrays.asList(
+                "[Event] A fierce howl echoes as the Primal Werewolf emerges, radiating raw,",
+                "untamed power."),
+            Arrays.asList(
+                "[Event] With a final roar, the Primal Werewolf collapses, his wild fury",
+                "extinguished.")
+        );
+        for (List<String> lines : cases) {
+            for (boolean includeCommon : new boolean[] {false, true}) {
+                EventMatcher.Frame frame = EventMatcher.scan(lines, includeCommon);
+                if (!frame.readable || !frame.events.isEmpty()) {
+                    throw new AssertionError("Kaldris Raid or Primal Werewolf leaked into alerts: " + lines);
+                }
+            }
+        }
+    }
+
+    private static void verifyPriorityWispsAndSpiritRift() {
+        Object[][] cases = {
+            { "[Event] A strange energy is felt throughout the kingdom", "spirit_rift", 0xF59E0B },
+            { "[Event] A wind wisp stirs the leaves somewhere in", "wind_wisp", 0x22C55E },
+            { "A wind wisp stirs the leaves somewhere in the grasslands", "wind_wisp", 0x22C55E },
+            { "[Event] A blood wisp has appeared across the grasslands", "blood_wisp", 0xEF4444 },
+            { "[Event] A light wisp has appeared across the grasslands", "light_wisp", 0xF59E0B }
+        };
+        for (Object[] sample : cases) {
+            EventMatcher.Frame frame = EventMatcher.scan(Arrays.asList((String) sample[0]), false);
+            if (frame.events.size() != 1) {
+                throw new AssertionError("Expected 1 priority match for: " + sample[0] + ", got " + frame.events.size());
+            }
+            EventMatcher.Rule rule = frame.events.get(0).rule;
+            if (!rule.id.equals(sample[1]) || !rule.priority || rule.color != ((Integer) sample[2]).intValue()) {
+                throw new AssertionError("Priority/color mismatch for " + sample[1] + ": id=" + rule.id
+                    + " priority=" + rule.priority + " color=" + Integer.toHexString(rule.color));
+            }
+        }
+    }
+
     private static void verifyLowResTagsAndNoise() {
         EventMatcher.Frame typoTags = EventMatcher.scan(Arrays.asList(
             "[Eveni] The air grows heavy, and darkness takes hold as every creature is consumed by corruption.",
@@ -158,7 +206,9 @@ final class EventReplay {
             { "khamsin", "[Event] The Sand Saqe has arrived." },
             { "void_wisp", "[Event] A Void Wi5p appears." },
             { "leak_event", "[Leak] Something is Ieaking in the grasslands." },
-            { "spirit_wisp", "[Event] A Blood Wi5p appears over the plains." },
+            { "blood_wisp", "[Event] A Blood Wi5p appears over the plains." },
+            { "wind_wisp", "[Event] A Wind Wi5p stirs the leaves somewhere in the grasslands." },
+            { "light_wisp", "[Event] A Light Wi5p appears over the plains." },
             { "strange_scientist", "[Event] The strange scientlst has arrived." },
             { "devil_rumors", "[Event] Someb0dy has seen a silhouette." },
             { "guarded_rift", "[Event] A guarded r1ft opens." },

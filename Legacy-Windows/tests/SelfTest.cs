@@ -550,7 +550,7 @@ namespace RoMulti
 
                     bool gotLeak = bottomMatches.Any(m => m.Rule.Id == "leak_event");
                     bool gotBandit = bottomMatches.Any(m => m.Rule.Id == "terra");
-                    bool gotBloodWisp = bottomMatches.Any(m => m.Rule.Id == "spirit_wisp");
+                    bool gotBloodWisp = bottomMatches.Any(m => m.Rule.Id == "blood_wisp");
                     if (!gotLeak || !gotBandit || !gotBloodWisp)
                     {
                         Console.WriteLine("    OCR LINES DUMP: " + string.Join(" | ", bottomLines));
@@ -889,7 +889,9 @@ namespace RoMulti
                 { "khamsin", "[Event] The Sand Saqe has arrived." },
                 { "void_wisp", "[Event] A Void Wi5p appears." },
                 { "leak_event", "[Leak] Something is Ieaking in the grasslands." },
-                { "spirit_wisp", "[Event] A Blood Wi5p appears over the plains." },
+                { "blood_wisp", "[Event] A Blood Wi5p appears over the plains." },
+                { "wind_wisp", "[Event] A Wind Wi5p stirs the leaves somewhere in the grasslands." },
+                { "light_wisp", "[Event] A Light Wi5p appears over the plains." },
                 { "strange_scientist", "[Event] The strange scientlst has arrived." },
                 { "devil_rumors", "[Event] Someb0dy has seen a silhouette." },
                 { "guarded_rift", "[Event] A guarded r1ft opens." },
@@ -1020,18 +1022,48 @@ namespace RoMulti
                 "bringing an ancient darkness with him.",
                 "[Event] Lucius falls, his dark reign fading into the shadows.",
                 "[Event] Lucius falls, his dark reign",
-                "[Tips] You can turn shiftlock on and off with the Left Control key."
+                "[Tips] You can turn shiftlock on and off with the Left Control key.",
+                "[System] You've exited a safezone.",
+                "[Raid] The ember altar flares. Kaldris, the Embersworn, waits in the Ashen",
+                "Crucible for up to 5 people nearby.",
+                "[Raid] Kaldris, the Embersworn, has been defeated. The crucible cools.",
+                "[Event] The ember altar flares. Kaldris, the Embersworn, waits in the Ashen Crucible.",
+                "[Event] A fierce howl echoes as the Primal Werewolf emerges, radiating raw,",
+                "untamed power.",
+                "[Event] With a final roar, the Primal Werewolf collapses, his wild fury",
+                "extinguished."
             };
             var matches = EventCatalog.MatchAllOccurrences(vampireChat, config);
             if (matches.Any(m => m.EffectiveLevel != EventAlertLevel.Ignore) ||
                 matches.Any(m => m.Rule.Id == "unknown_event") ||
-                !matches.Any(m => m.Rule.Id == "vampire_castle"))
+                !matches.Any(m => m.Rule.Id == "vampire_castle") ||
+                !matches.Any(m => m.Rule.Id == "primal_werewolf"))
             {
-                Console.WriteLine("FAIL: Vampire/Lucius events must all be ignored and never leak into alerts: " +
+                Console.WriteLine("FAIL: Vampire/Lucius/Kaldris/Werewolf events must all be ignored and never leak into alerts: " +
                     string.Join(", ", matches.Select(m => m.Rule.Id + ":" + m.EffectiveLevel)));
                 return false;
             }
-            Console.WriteLine("[OCR] Stronger vampire, Elite vampire, Shadow deepens & Lord Lucius ignored: OK");
+
+            // Priority Spirit Rift + color-coded Priority Wisps (Wind=Green, Blood=Red, Light=Yellow)
+            var priorityChecks = new[]
+            {
+                Tuple.Create("[Event] A strange energy is felt throughout the kingdom", "spirit_rift", 0xF59E0B),
+                Tuple.Create("[Event] A wind wisp stirs the leaves somewhere in", "wind_wisp", 0x22C55E),
+                Tuple.Create("[Event] A blood wisp has appeared across the grasslands", "blood_wisp", 0xEF4444),
+                Tuple.Create("[Event] A light wisp has appeared across the grasslands", "light_wisp", 0xF59E0B)
+            };
+            foreach (var chk in priorityChecks)
+            {
+                var found = EventCatalog.MatchLines(new[] { chk.Item1 }, config);
+                if (found.Count != 1 || found[0].Rule.Id != chk.Item2 ||
+                    found[0].EffectiveLevel != EventAlertLevel.Ping ||
+                    found[0].Rule.EmbedColor != chk.Item3)
+                {
+                    Console.WriteLine("FAIL: Priority/color mismatch for " + chk.Item2 + " <- " + chk.Item1);
+                    return false;
+                }
+            }
+            Console.WriteLine("[OCR] Ignored (Vampire/Lucius/Kaldris/Werewolf) & Priority (Spirit Rift + Wind/Blood/Light Wisps): OK");
             return true;
         }
 

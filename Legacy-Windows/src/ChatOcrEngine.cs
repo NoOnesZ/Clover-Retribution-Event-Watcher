@@ -564,9 +564,13 @@ namespace RoMulti
                    text.IndexOf("[Tips", StringComparison.OrdinalIgnoreCase) >= 0 ||
                    text.IndexOf("[System", StringComparison.OrdinalIgnoreCase) >= 0 ||
                    text.IndexOf("[Clover", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   text.IndexOf("[Raid", StringComparison.OrdinalIgnoreCase) >= 0 ||
                    text.IndexOf("Something feels", StringComparison.OrdinalIgnoreCase) >= 0 ||
                    text.IndexOf("strange energy", StringComparison.OrdinalIgnoreCase) >= 0 ||
                    text.IndexOf("mysterious energy", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   text.IndexOf("wind wisp", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   text.IndexOf("blood wisp", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   text.IndexOf("light wisp", StringComparison.OrdinalIgnoreCase) >= 0 ||
                    text.IndexOf("unlock chat", StringComparison.OrdinalIgnoreCase) >= 0 ||
                    text.IndexOf("to chat click", StringComparison.OrdinalIgnoreCase) >= 0;
         }

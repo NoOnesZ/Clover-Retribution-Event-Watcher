@@ -212,16 +212,76 @@ namespace RoMulti
                 Id = "spirit_rift",
                 DisplayName = "Spirit Rift",
                 Category = "Rift (Priority)",
-                Hint = "Strange energy feel toward kingdom (Gold)",
+                Hint = "A strange energy is felt throughout the kingdom (Yellow/Gold)",
                 EmbedColor = 0xF59E0B,
                 DefaultLevel = EventAlertLevel.Ping,
                 TokenGroups = new[]
                 {
                     new[] { "strange", "energy" },
+                    new[] { "felt", "throughout", "kingdom" },
+                    new[] { "energy", "throughout", "kingdom" },
+                    new[] { "energy", "felt", "kingdom" },
                     new[] { "energy", "toward", "kingdom" },
                     new[] { "energy", "kingdom" },
                     new[] { "spirit", "rift" },
                     new[] { "spirit", "portal" }
+                }
+            },
+            new EventRule
+            {
+                Id = "wind_wisp",
+                DisplayName = "Wind Wisp",
+                Category = "Rare Wisp (Priority)",
+                Hint = "A wind wisp stirs the leaves somewhere in... (Green)",
+                EmbedColor = 0x22C55E,
+                DefaultLevel = EventAlertLevel.Ping,
+                TokenGroups = new[]
+                {
+                    new[] { "wind", "wisp" },
+                    new[] { "stirs", "leaves" },
+                    new[] { "wind", "stirs" },
+                    new[] { "wind", "appeared" }
+                }
+            },
+            new EventRule
+            {
+                Id = "blood_wisp",
+                DisplayName = "Blood Wisp",
+                Category = "Rare Wisp (Priority)",
+                Hint = "A blood wisp has appeared across the grasslands (Red)",
+                EmbedColor = 0xEF4444,
+                DefaultLevel = EventAlertLevel.Ping,
+                TokenGroups = new[]
+                {
+                    new[] { "blood", "wisp" },
+                    new[] { "blood", "appeared" }
+                }
+            },
+            new EventRule
+            {
+                Id = "light_wisp",
+                DisplayName = "Light Wisp",
+                Category = "Rare Wisp (Priority)",
+                Hint = "A light wisp has appeared across the grasslands (Yellow/Gold)",
+                EmbedColor = 0xF59E0B,
+                DefaultLevel = EventAlertLevel.Ping,
+                TokenGroups = new[]
+                {
+                    new[] { "light", "wisp" },
+                    new[] { "light", "appeared" }
+                }
+            },
+            new EventRule
+            {
+                Id = "spirit_wisp",
+                DisplayName = "Spirit Wisp",
+                Category = "Rare Wisp (Priority)",
+                Hint = "Generic Spirit Wisp broadcast",
+                EmbedColor = 0x38BDF8,
+                DefaultLevel = EventAlertLevel.Ping,
+                TokenGroups = new[]
+                {
+                    new[] { "spirit", "wisp" }
                 }
             },
 
@@ -271,25 +331,6 @@ namespace RoMulti
                     new[] { "leak", "leaking" },
                     new[] { "is", "leaking" },
                     new[] { "leakingin" }
-                }
-            },
-            new EventRule
-            {
-                Id = "spirit_wisp",
-                DisplayName = "Spirit Wisp (Light/Blood/Wind)",
-                Category = "Rare Wisp",
-                Hint = "A blood/light/wind wisp has appeared across the grasslands",
-                EmbedColor = 0x38BDF8,
-                DefaultLevel = EventAlertLevel.Normal,
-                TokenGroups = new[]
-                {
-                    new[] { "spirit", "wisp" },
-                    new[] { "light", "wisp" },
-                    new[] { "blood", "wisp" },
-                    new[] { "wind", "wisp" },
-                    new[] { "blood", "appeared" },
-                    new[] { "light", "appeared", "grasslands" },
-                    new[] { "wind", "appeared", "grasslands" }
                 }
             },
             new EventRule
@@ -540,6 +581,46 @@ namespace RoMulti
                     new[] { "lucius" }
                 }
             },
+            new EventRule
+            {
+                Id = "ember_raid",
+                DisplayName = "Raid: Kaldris, the Embersworn",
+                Category = "Raid (Ignored)",
+                Hint = "[Raid] Kaldris, the Embersworn (Ashen Crucible)",
+                EmbedColor = 0x78716C,
+                DefaultLevel = EventAlertLevel.Ignore,
+                TokenGroups = new[]
+                {
+                    new[] { "ember", "altar" },
+                    new[] { "kaldris" },
+                    new[] { "embersworn" },
+                    new[] { "ashen", "crucible" },
+                    new[] { "crucible", "cools" }
+                }
+            },
+            new EventRule
+            {
+                Id = "primal_werewolf",
+                DisplayName = "Primal Werewolf",
+                Category = "Castle Event (Ignored)",
+                Hint = "A fierce howl echoes as the Primal Werewolf emerges / collapses",
+                EmbedColor = 0x78716C,
+                DefaultLevel = EventAlertLevel.Ignore,
+                TokenGroups = new[]
+                {
+                    new[] { "primal", "werewolf" },
+                    new[] { "fierce", "howl" },
+                    new[] { "howl", "echoes" },
+                    new[] { "werewolf", "emerges" },
+                    new[] { "untamed", "power" },
+                    new[] { "radiating", "raw" },
+                    new[] { "final", "roar" },
+                    new[] { "werewolf", "collapses" },
+                    new[] { "wild", "fury" },
+                    new[] { "fury", "extinguished" },
+                    new[] { "werewolf" }
+                }
+            },
 
             // --- Catch-All for any unrecognized [Event] broadcast ---
             new EventRule
@@ -563,9 +644,9 @@ namespace RoMulti
         private static readonly Regex NonAlphaNumRegex = new Regex(@"[^a-z0-9\s]", RegexOptions.Compiled);
         private static readonly Regex MultiSpaceRegex = new Regex(@"\s+", RegexOptions.Compiled);
         private static readonly Regex EventTagRegex = new Regex(@"(^|\s)(?:[\[\(\.:',;\|]\s*(?:[ectfk][vw]e(?:nt|ni|nf|nl|n7|m|rn)|l[e3][a4o]k|leek)|(?:e[vw]e(?:nt|ni|nf|nl|n7|m|rn)|l[e3][a4o]k|leek))([o0l]?\s*[\]\)\|':]|[o0l](?=\s)|(?=\s+[A-Za-z]))", RegexOptions.IgnoreCase | RegexOptions.Compiled);
-        private static readonly Regex NonEventPrefixRegex = new Regex(@"^\s*[\[\(\.:',;\|]?\s*(tips?|system|clover\s+system)(\s*[\]\)\|':]|(?=\s+[A-Za-z]))", RegexOptions.IgnoreCase | RegexOptions.Compiled);
-        private static readonly Regex AnyChatTagStartRegex = new Regex(@"^\s*(?:[\[\(\.:',;\|]\s*(?:[ectfk][vw]e(?:nt|ni|nf|nl|n7|m|rn)|l[e3][a4o]k|leek|tips?|system|clover\s+system|server|global)|(?:e[vw]e(?:nt|ni|nf|nl|n7|m|rn)|l[e3][a4o]k|leek|tips?|system|clover\s+system|server|global))([o0l]?\s*[\]\)\|':]|[o0l](?=\s)|(?=\s+[A-Za-z]))", RegexOptions.IgnoreCase | RegexOptions.Compiled);
-        private static readonly Regex InlineSecondTagRegex = new Regex(@"\s[\[\(\.:',;\|]\s*(event[o0]?|leak|tips?|system|clover\s+system)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        private static readonly Regex NonEventPrefixRegex = new Regex(@"^\s*[\[\(\.:',;\|]?\s*(tips?|system|clover\s+system|raid)(\s*[\]\)\|':]|(?=\s+[A-Za-z]))", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        private static readonly Regex AnyChatTagStartRegex = new Regex(@"^\s*(?:[\[\(\.:',;\|]\s*(?:[ectfk][vw]e(?:nt|ni|nf|nl|n7|m|rn)|l[e3][a4o]k|leek|tips?|system|clover\s+system|raid|server|global)|(?:e[vw]e(?:nt|ni|nf|nl|n7|m|rn)|l[e3][a4o]k|leek|tips?|system|clover\s+system|raid|server|global))([o0l]?\s*[\]\)\|':]|[o0l](?=\s)|(?=\s+[A-Za-z]))", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        private static readonly Regex InlineSecondTagRegex = new Regex(@"\s[\[\(\.:',;\|]\s*(event[o0]?|leak|tips?|system|clover\s+system|raid)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
         private static readonly Regex PlayerChatPrefixRegex = new Regex(@"^\s*(\[[^\]]+\]\s*)?[A-Za-z0-9_]{2,24}\s*:\s+\S", RegexOptions.Compiled);
         private static readonly Regex HotbarSlotGluedRegex = new Regex(@"(^|\s)[1-9][A-Z][a-z]{2,}", RegexOptions.Compiled);
 
@@ -579,8 +660,8 @@ namespace RoMulti
             "open the map", "semi colon", "open the menu", "grimoire equipped", "cast spells",
             "level up your magic", "gain spells",
             "unsheathe", "equipped weapon", "open the journal", "drop rates",
-            "bring out your grimoire", "entered a safezone", "server initialized", "joined the experience",
-            "turn shiftlock", "left control key"
+            "bring out your grimoire", "entered a safezone", "exited a safezone", "server initialized",
+            "joined the experience", "turn shiftlock", "left control key"
         };
 
         // Known HUD / hotbar / chat chrome markers that must NEVER attach to event text.
@@ -609,7 +690,7 @@ namespace RoMulti
             "retreat", "depart", "banish", "cease", "collaps", "dissolv",
             "reced", "sinks back", "returns to the", "returned to", "left the",
             "has ended", "event ended", "has closed", "portal closed", "rift closed", "closes",
-            "no longer", "calm returns", "peace returns", "overcome"
+            "no longer", "calm returns", "peace returns", "overcome", "extinguished"
         };
 
         public static bool IsDespawnOrEndMessage(string normalizedLine)
@@ -1069,16 +1150,27 @@ namespace RoMulti
                     return rule;
             }
             string[] words = normalizedLine.Split(' ');
-            if (!tagged && !StartsNearRift(words)) return null;
+            if (!tagged && !StartsNearRift(words) && !StartsNearPriorityWisp(words)) return null;
             EventRule candidate = null;
             foreach (var rule in Rules)
             {
-                bool rift = rule.Id == "devil_rift" || rule.Id == "spirit_rift";
-                if (rule.IsCatchAll || (!tagged && !rift) || !MatchesRuleTypo(words, rule)) continue;
+                bool priorityTagless = rule.Id == "devil_rift" || rule.Id == "spirit_rift" ||
+                    rule.Id == "wind_wisp" || rule.Id == "blood_wisp" || rule.Id == "light_wisp" || rule.Id == "spirit_wisp";
+                if (rule.IsCatchAll || (!tagged && !priorityTagless) || !MatchesRuleTypo(words, rule)) continue;
                 if (candidate != null) return null;
                 candidate = rule;
             }
             return candidate;
+        }
+
+        private static bool StartsNearPriorityWisp(string[] words)
+        {
+            int start = (words.Length > 0 && (words[0] == "a" || words[0] == "the")) ? 1 : 0;
+            if (words.Length - start < 2) return false;
+            return NearOpening(words, start, "wind", "wisp") ||
+                NearOpening(words, start, "blood", "wisp") ||
+                NearOpening(words, start, "light", "wisp") ||
+                NearOpening(words, start, "spirit", "wisp");
         }
 
         private static EventRule FindStarRule(string normalizedLine)

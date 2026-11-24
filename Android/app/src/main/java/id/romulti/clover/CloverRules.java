@@ -14,6 +14,19 @@ final class CloverRules {
             + "shadow deepens|vampire lord|lord lucius|lucius awakens|lucius falls|ancient darkness|dark reign|"
             + "vampire|vampires|lucius");
 
+    static final EventMatcher.Rule EMBER_RAID = new EventMatcher.Rule(
+        "ember_raid", "Raid: Kaldris, the Embersworn", 0x78716C, false, false,
+        "ember altar|kaldris|embersworn|ashen crucible|crucible cools");
+
+    static final EventMatcher.Rule PRIMAL_WEREWOLF = new EventMatcher.Rule(
+        "primal_werewolf", "Primal Werewolf", 0x78716C, false, false,
+        "primal werewolf|fierce howl|howl echoes|werewolf emerges|untamed power|radiating raw|"
+            + "final roar|werewolf collapses|wild fury|fury extinguished|werewolf");
+
+    static boolean isAlwaysMuted(EventMatcher.Rule rule) {
+        return rule == GIANT_DEMON || rule == VAMPIRE_CASTLE || rule == EMBER_RAID || rule == PRIMAL_WEREWOLF;
+    }
+
     static final String[] STAR_COUNTS = {"one", "two", "three", "four", "five", "six", "seven"};
     static final EventMatcher.Rule[] STAR_EVENTS = createStarEvents();
 
@@ -31,15 +44,21 @@ final class CloverRules {
         new EventMatcher.Rule("devil_rift", "Devil Rift", 0x9333EA, true, true,
             "something feels off|something feels|something off|devil rift|devil portal"),
         new EventMatcher.Rule("spirit_rift", "Spirit Rift", 0xF59E0B, true, true,
-            "strange energy|energy toward kingdom|energy kingdom|spirit rift|spirit portal"),
+            "strange energy|felt throughout kingdom|energy throughout kingdom|energy felt kingdom|energy toward kingdom|energy kingdom|spirit rift|spirit portal"),
+        new EventMatcher.Rule("wind_wisp", "Wind Wisp", 0x22C55E, true, true,
+            "wind wisp|stirs leaves|wind stirs|wind appeared"),
+        new EventMatcher.Rule("blood_wisp", "Blood Wisp", 0xEF4444, true, true,
+            "blood wisp|blood appeared"),
+        new EventMatcher.Rule("light_wisp", "Light Wisp", 0xF59E0B, true, true,
+            "light wisp|light appeared"),
+        new EventMatcher.Rule("spirit_wisp", "Spirit Wisp", 0x38BDF8, true, true,
+            "spirit wisp"),
         new EventMatcher.Rule("khamsin", "Khamsin: The Sand Sage", 0xA855F7, true, false,
             "khamsin|sands shift|sand sage|emerges dunes"),
         new EventMatcher.Rule("void_wisp", "Void Wisp", 0x6366F1, true, false,
             "void wisp|leaking hell"),
         new EventMatcher.Rule("leak_event", "Leak Event (Bug Report Item)", 0xEF4444, true, false,
             "something leaking|leaking grasslands|leak leaking|is leaking|leakingin"),
-        new EventMatcher.Rule("spirit_wisp", "Spirit Wisp (Light/Blood/Wind)", 0x38BDF8, true, false,
-            "spirit wisp|light wisp|blood wisp|wind wisp|blood appeared|light appeared grasslands|wind appeared grasslands"),
         new EventMatcher.Rule("strange_scientist", "Strange Scientist", 0x14B8A6, true, false,
             "veil shimmers|lone figure emerges|strange scientist"),
         new EventMatcher.Rule("devil_rumors", "Desert Town: Devil Rumors", 0xDC2626, false, false,
@@ -48,6 +67,8 @@ final class CloverRules {
             "guarded rift|shadow hand|shadowhand|rift shrouded|sinister mana|stands watch guarding|rift incursion"),
         GIANT_DEMON,
         VAMPIRE_CASTLE,
+        EMBER_RAID,
+        PRIMAL_WEREWOLF,
         new EventMatcher.Rule("corrupted_night", "Corrupted Night", 0x7C3AED, true, false,
             "air grows heavy|grows heavy|darkness takes hold|consumed corruption|creature corruption|corrupted night"),
         new EventMatcher.Rule("green_star", "A Green Star (Oath Ring)", 0x22C55E, true, false,
@@ -76,7 +97,7 @@ final class CloverRules {
         "mysteriously", "retreat", "depart", "banish", "cease", "collaps",
         "dissolv", "reced", "sinks back", "returns to the", "returned to", "left the",
         "has ended", "event ended", "has closed", "portal closed", "rift closed", "closes",
-        "no longer", "calm returns", "peace returns", "overcome"
+        "no longer", "calm returns", "peace returns", "overcome", "extinguished"
     };
 
     static final String[] TIP_PHRASES = {
@@ -86,7 +107,7 @@ final class CloverRules {
         "top of your screen", "open the map", "semi colon", "open the menu",
         "grimoire equipped", "cast spells", "level up your magic", "gain spells",
         "unsheathe", "equipped weapon", "open the journal", "drop rates",
-        "bring out your grimoire", "entered a safezone", "server initialized", "joined the experience",
-        "turn shiftlock", "left control key"
+        "bring out your grimoire", "entered a safezone", "exited a safezone", "server initialized",
+        "joined the experience", "turn shiftlock", "left control key"
     };
 }

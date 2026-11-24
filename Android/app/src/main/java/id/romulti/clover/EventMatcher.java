@@ -12,7 +12,7 @@ final class EventMatcher {
             + "|(?:event|eveni|evenf|evento|leak|leek)\\s*[\\]):|])\\s*",
         Pattern.CASE_INSENSITIVE);
     private static final Pattern OTHER_TAG = Pattern.compile(
-        "^\\s*[\\[(]?\\s*(?:tips?|system|clover system|server|global)\\s*[\\]):|]",
+        "^\\s*[\\[(]?\\s*(?:tips?|system|clover system|raid|server|global)\\s*[\\]):|]",
         Pattern.CASE_INSENSITIVE);
     private static final Pattern PLAYER = Pattern.compile("^\\s*(?:\\[[^]]+\\]\\s*)?[\\w]{2,24}:\\s+\\S");
     private static final Pattern NON_WORD = Pattern.compile("[^a-z0-9]+");
@@ -61,7 +61,7 @@ final class EventMatcher {
                 }
             }
 
-            if (normalized.isEmpty() || (!tagged && star == null && !startsRift(normalized))) continue;
+            if (normalized.isEmpty() || (!tagged && star == null && !startsRift(normalized) && !startsPriorityWisp(normalized))) continue;
 
             if (star == null && index + 1 < lines.size() && !endsSentence(body)) {
                 String next = lines.get(index + 1).trim();
@@ -80,8 +80,7 @@ final class EventMatcher {
             }
             if (rule == null) continue;
             frame.readable = true;
-            if (rule != CloverRules.GIANT_DEMON && rule != CloverRules.VAMPIRE_CASTLE
-                    && (rule.enabledByDefault || includeCommon)) {
+            if (!CloverRules.isAlwaysMuted(rule) && (rule.enabledByDefault || includeCommon)) {
                 String key = rule == CloverRules.UNKNOWN ? rule.id + ":" + bodyKey(body) : rule.id;
                 frame.events.add(new Detection(rule, body, key));
             }
@@ -93,7 +92,7 @@ final class EventMatcher {
         if (line.isEmpty() || EVENT.matcher(line).find() || OTHER_TAG.matcher(line).find() ||
                 PLAYER.matcher(line).find()) return false;
         String normalized = normalize(line);
-        return !startsRift(normalized) && findStarRule(normalized, false) == null;
+        return !startsRift(normalized) && !startsPriorityWisp(normalized) && findStarRule(normalized, false) == null;
     }
 
     private static Rule findRule(String line, boolean tagged) {
@@ -102,17 +101,34 @@ final class EventMatcher {
             if ((!tagged && !rule.priority) || !rule.matches(line)) continue;
             if (!tagged && rule.id.equals("devil_rift") && !line.contains("feels off")) continue;
             if (!tagged && rule.id.equals("spirit_rift") && !line.contains("kingdom")) continue;
+            if (!tagged && isPriorityWispRule(rule) && !startsPriorityWisp(line)) continue;
             return rule;
         }
-        if (!tagged && !startsRift(line)) return null;
+        if (!tagged && !startsRift(line) && !startsPriorityWisp(line)) return null;
         String[] words = line.split(" ");
         Rule candidate = null;
         for (Rule rule : CloverRules.NAMED) {
             if ((!tagged && !rule.priority) || !rule.matchesTypo(words)) continue;
+            if (!tagged && isPriorityWispRule(rule) && !startsPriorityWisp(line)) continue;
             if (candidate != null) return null;
             candidate = rule;
         }
         return candidate;
+    }
+
+    private static boolean isPriorityWispRule(Rule rule) {
+        return rule.id.equals("wind_wisp") || rule.id.equals("blood_wisp")
+            || rule.id.equals("light_wisp") || rule.id.equals("spirit_wisp");
+    }
+
+    private static boolean startsPriorityWisp(String line) {
+        String[] words = line.split(" ");
+        int start = (words.length > 0 && (words[0].equals("a") || words[0].equals("the"))) ? 1 : 0;
+        if (words.length - start < 2) return false;
+        return nearOpening(words, start, "wind", "wisp")
+            || nearOpening(words, start, "blood", "wisp")
+            || nearOpening(words, start, "light", "wisp")
+            || nearOpening(words, start, "spirit", "wisp");
     }
 
     private static boolean startsStar(String line) {

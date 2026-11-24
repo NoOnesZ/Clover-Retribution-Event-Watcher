@@ -396,9 +396,11 @@ final class OcrTextCore {
         return lower.contains("[event") || lower.contains("[even") || lower.contains("event]")
             || lower.contains("[leak") || lower.contains("[leek") || lower.contains("leak]")
             || lower.contains("[tips") || lower.contains("[system") || lower.contains("[clover")
+            || lower.contains("[raid")
             || lower.contains("something feels") || lower.contains("strange energy")
-            || lower.contains("mysterious energy") || lower.contains("unlock chat")
-            || lower.contains("to chat click");
+            || lower.contains("mysterious energy")
+            || lower.contains("wind wisp") || lower.contains("blood wisp") || lower.contains("light wisp")
+            || lower.contains("unlock chat") || lower.contains("to chat click");
     }
 
     private OcrTextCore() {}
