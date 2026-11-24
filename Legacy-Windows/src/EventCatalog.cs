@@ -696,13 +696,29 @@ namespace RoMulti
         // so despawn/death messages never trigger spawn alerts!
         private static readonly string[] DespawnIndicators = new[]
         {
-            "vanish", "eanish", "despawn", "disappear", "dissipat", "subsid", "fade", "fading",
-            "defeat", "slain", "was killed", "has died", "has fallen", "falls to",
-            "leaving only", "leaving ont", "vowing revenge", "misteriously", "mysteriously",
+            "vanish", "eanish", "vanished", "despawn", "disappear", "dissipat", "subsid", "fade", "fading",
+            "defeat", "defeated", "slain", "was killed", "has died", "has fallen", "falls to",
+            "leaving only", "leaving on", "leaving ont", "in his wake", "his wake", "h is wake",
+            "in its wake", "its wake", "whispers in", "beneath the dunes",
+            "vowing revenge", "vowing", "revenge", "misteriously", "mysteriously",
             "retreat", "depart", "banish", "cease", "collaps", "dissolv",
             "reced", "sinks back", "returns to the", "returned to", "left the",
             "has ended", "event ended", "has closed", "portal closed", "rift closed", "closes",
-            "no longer", "calm returns", "peace returns", "overcome", "extinguished"
+            "no longer", "calm returns", "peace returns", "overcome", "extinguished", "has fled", "expired"
+        };
+
+        private static readonly string[] FuzzyDespawnWords = new[]
+        {
+            "vanish", "vanishes", "vanished", "vanishing",
+            "defeat", "defeats", "defeated", "defeating",
+            "despawn", "despawns", "despawned",
+            "disappear", "disappears", "disappeared",
+            "retreat", "retreats", "retreated",
+            "collapse", "collapses", "collapsed",
+            "dissipate", "dissipates", "dissipated",
+            "subside", "subsides", "subsided",
+            "banish", "banished",
+            "extinguished", "revenge"
         };
 
         public static bool IsDespawnOrEndMessage(string normalizedLine)
@@ -715,6 +731,17 @@ namespace RoMulti
             {
                 if (normalizedLine.IndexOf(indicator, StringComparison.OrdinalIgnoreCase) >= 0)
                     return true;
+            }
+            string[] words = normalizedLine.Split(' ');
+            for (int i = 0; i < words.Length; i++)
+            {
+                string w = words[i];
+                if (w.Length < 5) continue;
+                for (int j = 0; j < FuzzyDespawnWords.Length; j++)
+                {
+                    if (NearOcrWord(w, FuzzyDespawnWords[j]))
+                        return true;
+                }
             }
             return false;
         }

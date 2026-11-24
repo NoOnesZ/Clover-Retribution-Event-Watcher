@@ -52,6 +52,20 @@ final class EventReplay {
         expect(singleFrame, 6, "", "Unlock chat");
         expect(singleFrame, 9, "", TIP, OTHER);
         expect(singleFrame, 12, "unknown_event", TIP, OTHER);
+
+        // Timeline Memory regression (exact 08:17 -> 08:20 -> 08:21 scenario):
+        // Old event flickers unreadable for 4 minutes (> 2 min window) while [Leak] arrives below it;
+        // reappearing ABOVE [Leak] MUST NOT duplicate, while a real 2nd spawn at the bottom MUST alert!
+        String khamsin = "[Event] The sands shift; Khamsin, the Sand Sage, emerges from the dunes.";
+        String leak = "[Leak] Something is leaking in the grasslands...";
+        EventHistory mem = new EventHistory();
+        expect(mem, 0, "", TIP);
+        expect(mem, 3, "khamsin", TIP, khamsin);
+        expect(mem, 6, "", TIP);
+        expect(mem, 9, "", TIP);
+        expect(mem, 180, "leak_event", TIP, leak);
+        expect(mem, 240, "", TIP, khamsin, leak);
+        expect(mem, 246, "khamsin", TIP, khamsin, leak, khamsin);
     }
 
     private static void verifyLongStars() {
@@ -208,6 +222,19 @@ final class EventReplay {
         ), false);
         if (safeCheck.events.size() != 1 || !safeCheck.events.get(0).rule.id.equals("leak_event")) {
             throw new AssertionError("Devil Rift fuzzy matcher false-triggered on Leak/Rumors/Tips!");
+        }
+        // Fuzzy vanished / defeated / retreated / collapsed despawns must NEVER trigger even with includeCommon=true
+        EventMatcher.Frame despawnCheck = EventMatcher.scan(Arrays.asList(
+            "[Event] The Bandit Lord vanlshes, leaving onty whispers in",
+            "h is wake.",
+            "[Event] The Bandit Lord van1shed from the plains.",
+            "[Event] Khamsin, the Sand Sage, has been defe4ted!",
+            "[Event] Khamsin has been defeatcd!",
+            "[Event] The Warlord reireats on the winds of the plains.",
+            "[Event] A wind wisp vanlshes from the grasslands."
+        ), true);
+        if (!despawnCheck.events.isEmpty()) {
+            throw new AssertionError("Fuzzy despawn line leaked into alerts! count=" + despawnCheck.events.size());
         }
     }
 

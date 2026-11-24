@@ -20,6 +20,13 @@ namespace RoMulti
 
     public sealed class DiscordNotifier
     {
+        private sealed class TimelineAnchor
+        {
+            public string PrevSig = "";
+            public string NextSig = "";
+            public DateTime RecordedAtUtc;
+        }
+
         private sealed class KeyTrackState
         {
             public int VisibleCount;
@@ -28,10 +35,31 @@ namespace RoMulti
             public DateTime PendingAtUtc;
             public DateTime LastSeenUtc;
             public string Body = "";
+            public List<TimelineAnchor> Anchors = new List<TimelineAnchor>();
 
             public bool SeenRecently(DateTime now)
             {
                 return LastSeenUtc != DateTime.MinValue && now - LastSeenUtc < ScrollReplayWindow;
+            }
+
+            public bool SeenWithinMemory(DateTime now)
+            {
+                return LastSeenUtc != DateTime.MinValue && now - LastSeenUtc < ForgetInvisibleAfter;
+            }
+
+            public void RecordAnchor(string prevSig, string nextSig, DateTime now)
+            {
+                Anchors.RemoveAll(a => now - a.RecordedAtUtc >= ForgetInvisibleAfter);
+                for (int i = 0; i < Anchors.Count; i++)
+                {
+                    if (SameNeighbor(Anchors[i].PrevSig, prevSig) && SameNeighbor(Anchors[i].NextSig, nextSig))
+                    {
+                        Anchors[i].RecordedAtUtc = now;
+                        return;
+                    }
+                }
+                Anchors.Add(new TimelineAnchor { PrevSig = prevSig, NextSig = nextSig, RecordedAtUtc = now });
+                if (Anchors.Count > 12) Anchors.RemoveAt(0);
             }
         }
 
@@ -41,6 +69,8 @@ namespace RoMulti
             public DateTime FirstSeenUtc;
             public string LastJobId;
             public Dictionary<string, KeyTrackState> Keys = new Dictionary<string, KeyTrackState>(StringComparer.OrdinalIgnoreCase);
+            public Dictionary<string, DateTime> SeenEventLines = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
+            public HashSet<string> LastScanLineSigs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         }
 
         private static readonly HttpClient Http = CreateHttpClient();
@@ -118,8 +148,10 @@ namespace RoMulti
                         !string.Equals(pidState.LastJobId, jobId, StringComparison.OrdinalIgnoreCase))
                     {
                         // Server hopped / teleported to a brand-new Roblox server:
-                        // chat starts fresh, so clear previous server's event counts while keeping baseline armed!
+                        // chat starts fresh, so clear previous server's event counts & timeline memory while keeping baseline armed!
                         pidState.Keys.Clear();
+                        pidState.SeenEventLines.Clear();
+                        pidState.LastScanLineSigs.Clear();
                         pidState.BaselineInitialized = true;
                         pidState.LastJobId = jobId;
                     }
@@ -132,6 +164,8 @@ namespace RoMulti
                 // Group visible occurrences by canonical key (fuzzy-grouping unknown:* Catch-All variants)
                 var grouped = GroupOccurrencesByCanonicalKey(visibleOccurrences, pidState.Keys, now);
 
+                var timelineSigs = BuildTimelineSignatures(stitchedTimeline);
+
                 if (!pidState.BaselineInitialized)
                 {
                     if (hasReadableChat)
@@ -139,13 +173,21 @@ namespace RoMulti
                         pidState.BaselineInitialized = true;
                         foreach (var kv in grouped)
                         {
-                            pidState.Keys[kv.Key] = new KeyTrackState
+                            var state = new KeyTrackState
                             {
                                 VisibleCount = kv.Value.Count,
                                 LastSeenUtc = now,
                                 Body = EventCatalog.BroadcastBodyKey(kv.Value[kv.Value.Count - 1].RawLine)
                             };
+                            foreach (var occ in kv.Value)
+                            {
+                                string prevSig, nextSig;
+                                GetNeighborSignatures(timelineSigs, occ.TimelineIndex, out prevSig, out nextSig);
+                                state.RecordAnchor(prevSig, nextSig, now);
+                            }
+                            pidState.Keys[kv.Key] = state;
                         }
+                        RecordTimelineMemory(pidState, stitchedTimeline, timelineSigs, now);
                         initializedBaseline = true;
                         baselineEventCount = visibleOccurrences != null ? visibleOccurrences.Count : 0;
                         return toEmit;
@@ -185,6 +227,8 @@ namespace RoMulti
                         pidState.Keys.Add(key, tracked);
                     }
                     string body = EventCatalog.BroadcastBodyKey(newest.RawLine);
+                    string newestPrevSig, newestNextSig;
+                    GetNeighborSignatures(timelineSigs, newest.TimelineIndex, out newestPrevSig, out newestNextSig);
                     if (curCount > tracked.VisibleCount)
                     {
                         if (newest.Rule.IsCatchAll)
@@ -201,7 +245,9 @@ namespace RoMulti
                         bool recentReappearance = tracked.VisibleCount == 0 && tracked.SeenRecently(now);
                         bool alreadyReportedUnderOtherName = !newest.Rule.IsCatchAll && tracked.VisibleCount == 0 &&
                             ResemblesRecent(body, pidState.Keys, now, unknown: true);
-                        if (!recentReappearance && !alreadyReportedUnderOtherName) toEmit.Add(newest);
+                        bool oldTimelineReplay = tracked.SeenWithinMemory(now) &&
+                            IsOldTimelineReplay(tracked, pidState, stitchedTimeline, timelineSigs, newest.TimelineIndex, newestPrevSig, newestNextSig, now);
+                        if (!recentReappearance && !alreadyReportedUnderOtherName && !oldTimelineReplay) toEmit.Add(newest);
                         tracked.VisibleCount = curCount;
                         tracked.LowerStreak = 0;
                     }
@@ -224,6 +270,12 @@ namespace RoMulti
                     tracked.PendingCount = 0;
                     tracked.LastSeenUtc = now;
                     tracked.Body = body;
+                    foreach (var occ in list)
+                    {
+                        string pSig, nSig;
+                        GetNeighborSignatures(timelineSigs, occ.TimelineIndex, out pSig, out nSig);
+                        tracked.RecordAnchor(pSig, nSig, now);
+                    }
                 }
 
                 // Handle tracked keys that are no longer visible on screen (curCount == 0)
@@ -249,6 +301,7 @@ namespace RoMulti
                     }
                 }
                 foreach (string key in forgotten) pidState.Keys.Remove(key);
+                RecordTimelineMemory(pidState, stitchedTimeline, timelineSigs, now);
             }
 
             toEmit.Sort((a, b) => a.TimelineIndex.CompareTo(b.TimelineIndex));
@@ -327,6 +380,138 @@ namespace RoMulti
                 kv.Value.Sort((a, b) => a.TimelineIndex.CompareTo(b.TimelineIndex));
 
             return grouped;
+        }
+
+        private static List<string> BuildTimelineSignatures(List<string> timeline)
+        {
+            var sigs = new List<string>();
+            if (timeline == null) return sigs;
+            for (int i = 0; i < timeline.Count; i++)
+            {
+                string norm = EventCatalog.NormalizeForMatch(timeline[i]);
+                if (norm.Length > 120) norm = norm.Substring(0, 120).Trim();
+                sigs.Add(norm);
+            }
+            return sigs;
+        }
+
+        private static bool IsGenericTipOrSystemSig(string sig)
+        {
+            if (string.IsNullOrEmpty(sig)) return true;
+            return sig.StartsWith("tips ", StringComparison.OrdinalIgnoreCase) ||
+                sig.StartsWith("tip ", StringComparison.OrdinalIgnoreCase) ||
+                sig.StartsWith("system ", StringComparison.OrdinalIgnoreCase) ||
+                sig.StartsWith("clover system ", StringComparison.OrdinalIgnoreCase) ||
+                sig.Contains("to chat click") ||
+                sig.Contains("unlock chat") ||
+                sig.Contains("here global");
+        }
+
+        private static void GetNeighborSignatures(List<string> sigs, int index, out string prevSig, out string nextSig)
+        {
+            prevSig = (sigs != null && index > 0 && index - 1 < sigs.Count) ? sigs[index - 1] : "";
+            nextSig = (sigs != null && index >= 0 && index + 1 < sigs.Count) ? sigs[index + 1] : "";
+        }
+
+        private static bool SameNeighbor(string a, string b)
+        {
+            if (string.IsNullOrEmpty(a) || string.IsNullOrEmpty(b))
+                return string.IsNullOrEmpty(a) && string.IsNullOrEmpty(b);
+            return string.Equals(a, b, StringComparison.OrdinalIgnoreCase) || EventCatalog.SameBroadcastText(a, b);
+        }
+
+        private static bool IsLineInMemory(string sig, Dictionary<string, DateTime> memory, DateTime now)
+        {
+            if (string.IsNullOrEmpty(sig) || sig.Length < 12) return false;
+            DateTime seenAt;
+            if (memory.TryGetValue(sig, out seenAt) && now - seenAt < ForgetInvisibleAfter)
+                return true;
+            foreach (var kv in memory)
+            {
+                if (now - kv.Value >= ForgetInvisibleAfter) continue;
+                if (EventCatalog.SameBroadcastText(sig, kv.Key))
+                    return true;
+            }
+            return false;
+        }
+
+        private static bool IsLineInSet(string sig, HashSet<string> set)
+        {
+            if (string.IsNullOrEmpty(sig) || sig.Length < 12 || set == null || set.Count == 0) return false;
+            if (set.Contains(sig)) return true;
+            foreach (string existing in set)
+            {
+                if (EventCatalog.SameBroadcastText(sig, existing))
+                    return true;
+            }
+            return false;
+        }
+
+        private static bool IsOldTimelineReplay(
+            KeyTrackState tracked,
+            PidWatcherState pidState,
+            List<string> timeline,
+            List<string> timelineSigs,
+            int timelineIndex,
+            string prevSig,
+            string nextSig,
+            DateTime now)
+        {
+            if (timelineSigs == null || timelineIndex < 0 || timelineIndex >= timelineSigs.Count)
+                return false;
+
+            // Rule M1: An already-seen event that reappears ABOVE a previously seen chat message
+            // (a non-tip event/leak line from an earlier scan, OR any line already visible on the
+            // immediately preceding scan) is physically an OLD message in chat history, never a new spawn!
+            for (int below = timelineIndex + 1; below < timelineSigs.Count; below++)
+            {
+                string belowSig = timelineSigs[below];
+                if (string.IsNullOrEmpty(belowSig) || belowSig.Length < 12) continue;
+                if (!IsGenericTipOrSystemSig(belowSig) && IsLineInMemory(belowSig, pidState.SeenEventLines, now))
+                    return true;
+                if (IsLineInSet(belowSig, pidState.LastScanLineSigs))
+                    return true;
+            }
+
+            // Rule M2: Same physical chat slot remembered in Anchors within 30 minutes
+            // (either both Prev & Next neighbors match, or a non-generic Prev event/chat neighbor matches).
+            for (int i = 0; i < tracked.Anchors.Count; i++)
+            {
+                var anchor = tracked.Anchors[i];
+                if (now - anchor.RecordedAtUtc >= ForgetInvisibleAfter) continue;
+                bool prevMatch = !string.IsNullOrEmpty(prevSig) && !string.IsNullOrEmpty(anchor.PrevSig) &&
+                    SameNeighbor(anchor.PrevSig, prevSig);
+                bool nextMatch = !string.IsNullOrEmpty(nextSig) && !string.IsNullOrEmpty(anchor.NextSig) &&
+                    SameNeighbor(anchor.NextSig, nextSig);
+                if (prevMatch && nextMatch)
+                    return true;
+                if (prevMatch && !IsGenericTipOrSystemSig(prevSig) && (string.IsNullOrEmpty(anchor.NextSig) || nextMatch))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static void RecordTimelineMemory(PidWatcherState pidState, List<string> timeline, List<string> sigs, DateTime now)
+        {
+            var expired = new List<string>();
+            foreach (var kv in pidState.SeenEventLines)
+            {
+                if (now - kv.Value >= ForgetInvisibleAfter)
+                    expired.Add(kv.Key);
+            }
+            foreach (string k in expired) pidState.SeenEventLines.Remove(k);
+
+            pidState.LastScanLineSigs.Clear();
+            if (sigs == null) return;
+            for (int i = 0; i < sigs.Count; i++)
+            {
+                string sig = sigs[i];
+                if (string.IsNullOrEmpty(sig) || sig.Length < 12) continue;
+                pidState.LastScanLineSigs.Add(sig);
+                if (!IsGenericTipOrSystemSig(sig))
+                    pidState.SeenEventLines[sig] = now;
+            }
         }
 
         private static bool ResemblesRecent(string body, Dictionary<string, KeyTrackState> existing, DateTime now, bool unknown)

@@ -91,13 +91,28 @@ final class CloverRules {
         "unknown_event", "Other [Event] Broadcast", 0x3B82F6, true, false, "");
 
     static final String[] DESPAWN = {
-        "vanish", "eanish", "despawn", "disappear", "dissipat", "subsid",
-        "fade", "fading", "defeat", "slain", "was killed", "has died",
-        "has fallen", "falls to", "leaving only", "leaving ont", "vowing revenge", "misteriously",
+        "vanish", "eanish", "vanished", "despawn", "disappear", "dissipat", "subsid",
+        "fade", "fading", "defeat", "defeated", "slain", "was killed", "has died",
+        "has fallen", "falls to", "leaving only", "leaving on", "leaving ont",
+        "in his wake", "his wake", "h is wake", "in its wake", "its wake", "whispers in",
+        "beneath the dunes", "vowing revenge", "vowing", "revenge", "misteriously",
         "mysteriously", "retreat", "depart", "banish", "cease", "collaps",
         "dissolv", "reced", "sinks back", "returns to the", "returned to", "left the",
         "has ended", "event ended", "has closed", "portal closed", "rift closed", "closes",
-        "no longer", "calm returns", "peace returns", "overcome", "extinguished"
+        "no longer", "calm returns", "peace returns", "overcome", "extinguished", "has fled", "expired"
+    };
+
+    static final String[] FUZZY_DESPAWN_WORDS = {
+        "vanish", "vanishes", "vanished", "vanishing",
+        "defeat", "defeats", "defeated", "defeating",
+        "despawn", "despawns", "despawned",
+        "disappear", "disappears", "disappeared",
+        "retreat", "retreats", "retreated",
+        "collapse", "collapses", "collapsed",
+        "dissipate", "dissipates", "dissipated",
+        "subside", "subsides", "subsided",
+        "banish", "banished",
+        "extinguished", "revenge"
     };
 
     static final String[] TIP_PHRASES = {

@@ -41,11 +41,15 @@ final class EventMatcher {
             if (line.isEmpty()) continue;
             if (OTHER_TAG.matcher(line).find()) {
                 frame.readable = true;
+                frame.timeline.add(timelineSig(line));
                 continue;
             }
             Matcher tag = EVENT.matcher(line);
             boolean tagged = tag.find();
-            if (!tagged && PLAYER.matcher(line).find()) continue;
+            if (!tagged && PLAYER.matcher(line).find()) {
+                frame.timeline.add(timelineSig(line));
+                continue;
+            }
             String body = tagged ? line.substring(tag.end()).trim() : line;
             if (tagged && !body.isEmpty()) frame.readable = true;
             String normalized = normalize(body);
@@ -69,7 +73,10 @@ final class EventMatcher {
                 }
             }
 
-            if (normalized.isEmpty() || (!tagged && star == null && !startsRift(normalized) && !startsPriorityWisp(normalized) && !isDevilRiftFuzzyBroadcast(normalized, false))) continue;
+            if (normalized.isEmpty() || (!tagged && star == null && !startsRift(normalized) && !startsPriorityWisp(normalized) && !isDevilRiftFuzzyBroadcast(normalized, false))) {
+                if (normalized.length() >= 8) frame.timeline.add(timelineSig(line));
+                continue;
+            }
 
             if (star == null && index + 1 < lines.size() && !endsSentence(body)) {
                 String next = lines.get(index + 1).trim();
@@ -80,8 +87,10 @@ final class EventMatcher {
                 }
             }
 
-            if (containsAny(normalized, CloverRules.DESPAWN) || isCorruptedNightEnd(normalized) ||
-                containsAny(normalized, CloverRules.TIP_PHRASES)) continue;
+            int timelineIndex = frame.timeline.size();
+            frame.timeline.add(timelineSig(tagged ? "[Event] " + body : body));
+
+            if (isDespawnOrEnd(normalized) || containsAny(normalized, CloverRules.TIP_PHRASES)) continue;
             Rule rule = star != null ? star : findRule(normalized, tagged);
             if (rule == null && tagged && isReadableUnknown(body)) {
                 rule = CloverRules.UNKNOWN;
@@ -90,7 +99,7 @@ final class EventMatcher {
             frame.readable = true;
             if (!CloverRules.isAlwaysMuted(rule) && (rule.enabledByDefault || includeCommon)) {
                 String key = rule == CloverRules.UNKNOWN ? rule.id + ":" + bodyKey(body) : rule.id;
-                frame.events.add(new Detection(rule, body, key));
+                frame.events.add(new Detection(rule, body, key, timelineIndex));
             }
         }
         return frame;
@@ -181,6 +190,18 @@ final class EventMatcher {
             candidate = CloverRules.STAR_EVENTS[i];
         }
         return candidate;
+    }
+
+    private static boolean isDespawnOrEnd(String line) {
+        if (containsAny(line, CloverRules.DESPAWN) || isCorruptedNightEnd(line)) return true;
+        String[] words = line.split(" ");
+        for (String w : words) {
+            if (w.length() < 5) continue;
+            for (String despawn : CloverRules.FUZZY_DESPAWN_WORDS) {
+                if (nearWord(w, despawn)) return true;
+            }
+        }
+        return false;
     }
 
     private static boolean isCorruptedNightEnd(String line) {
@@ -428,22 +449,30 @@ final class EventMatcher {
         }
     }
 
+    static String timelineSig(String text) {
+        String clean = normalize(text);
+        return clean.length() > 120 ? clean.substring(0, 120).trim() : clean;
+    }
+
     static final class Detection {
         final Rule rule;
         final String text;
         final String key;
         final String bodyKey;
+        final int timelineIndex;
 
-        Detection(Rule rule, String text, String key) {
+        Detection(Rule rule, String text, String key, int timelineIndex) {
             this.rule = rule;
             this.text = text;
             this.key = key;
             this.bodyKey = EventMatcher.bodyKey(text);
+            this.timelineIndex = timelineIndex;
         }
     }
 
     static final class Frame {
         final List<Detection> events = new ArrayList<>();
+        final List<String> timeline = new ArrayList<>();
         boolean readable;
     }
 

@@ -145,22 +145,40 @@ namespace RoMulti
             var despawnLines = new[]
             {
                 "[Event] The Bandit Lord vanishes, leaving only whispers",
+                "[Event] The Bandit Lord vanlshes, leaving onty whispers in",
+                "h is wake.",
+                "[Event] The Bandit Lord van1shed from the plains.",
+                "[Event] The Bandit Lord ..., leaving onty whispers in",
+                "his wake.",
                 "[Event] The Warlord retreats, vowing revenge on the winds of the plains.",
+                "[Event] The Warlord reireats on the winds of the plains.",
                 "[Event] Somebody has misteriously disappeared from the Desert Village",
                 "[Event] Somebody ha",
                 "[Event] Khamsin, the Sand Sage, retreats beneath the dunes.",
                 "[Event] Khamsin, the Sand Sage, has been defeated!",
+                "[Event] Khamsin, the Sand Sage, has been defe4ted!",
+                "[Event] Khamsin has been defeatcd!",
                 "[Event] The Devil Rift closes.",
                 "[Event] A blood wisp fades away from the grasslands.",
+                "[Event] A wind wisp vanlshes from the grasslands.",
+                "[Event] The Primal Werewolf col1apses.",
                 "[Event] The strange energy toward the kingdom subsides."
             };
             var despawnMatches = EventCatalog.MatchLines(despawnLines, defaultCfg);
             if (despawnMatches.Count != 0)
             {
-                Console.WriteLine("FAIL: Expected 0 matches for despawn/death lines, got " + despawnMatches.Count);
+                Console.WriteLine("FAIL: Expected 0 matches for despawn/death lines, got " + despawnMatches.Count +
+                    ": " + string.Join(", ", despawnMatches.Select(m => m.Rule.Id + ":" + m.RawLine)));
                 return 1;
             }
-            Console.WriteLine("    4c Despawn / defeated filter (0 false spawn pings): OK");
+            // Ensure fuzzy despawn filter NEVER breaks "[Leak] Something is leaking..."
+            var leakAlive = EventCatalog.MatchLines(new[] { "[Leak] Something is leaking in the grasslands..." }, defaultCfg);
+            if (leakAlive.Count != 1 || leakAlive[0].Rule.Id != "leak_event")
+            {
+                Console.WriteLine("FAIL: Despawn filter accidentally suppressed leak_event!");
+                return 1;
+            }
+            Console.WriteLine("    4c Despawn / vanished / defeated filter (exact + fuzzy OCR typos, 0 false pings): OK");
 
             // 5. Discord 5-min anti-spam deduplication (exact + fuzzy partial-OCR Catch-All dedupe)
             var notifier = new DiscordNotifier();
@@ -963,7 +981,25 @@ namespace RoMulti
                 Replay(interrupted, config, start, 6, "", "Unlock chat") &&
                 Replay(interrupted, config, start, 9, "", tip, other) &&
                 Replay(interrupted, config, start, 12, "unknown_event", tip, other);
-            if (valid) Console.WriteLine("[OCR] Typo, scroll replay, new spawn and unknown confirmation: OK");
+
+            // Timeline Memory regression (exact 08:17 -> 08:20 -> 08:21 scenario):
+            // Old event flickers unreadable for 4 minutes (> 2 min window) while a new [Leak] appears below it;
+            // when the old event reappears ABOVE [Leak], Timeline Memory MUST suppress the duplicate,
+            // while a genuine 2nd same-type spawn at the BOTTOM of chat MUST still alert immediately!
+            const string khamsin = "[Event] The sands shift; Khamsin, the Sand Sage, emerges from the dunes.";
+            const string leak = "[Leak] Something is leaking in the grasslands...";
+            var mem = new DiscordNotifier();
+            valid = valid &&
+                Replay(mem, config, start, 0, "", tip) &&
+                Replay(mem, config, start, 3, "khamsin", tip, khamsin);
+            for (int sec = 6; valid && sec <= 24; sec += 3)
+                valid = Replay(mem, config, start, sec, "", tip);
+            valid = valid &&
+                Replay(mem, config, start, 180, "leak_event", tip, leak) &&
+                Replay(mem, config, start, 240, "", tip, khamsin, leak) &&
+                Replay(mem, config, start, 246, "khamsin", tip, khamsin, leak, khamsin);
+
+            if (valid) Console.WriteLine("[OCR] Typo, scroll replay, timeline context memory, new spawn and unknown confirmation: OK");
             return valid;
         }
 

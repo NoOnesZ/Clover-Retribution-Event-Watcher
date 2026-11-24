@@ -95,6 +95,8 @@ namespace RoMulti
         private TextBox _webhookBox;
         private TextBox _pingTextBox;
         private TextBox _privateServerBox;
+        private TextBlock _privateServerPlaceholder;
+        private TextBlock _privateServerStatusLabel;
         private CheckBox _attachScreenshotCheck;
         private CheckBox _alertMapChangeCheck;
         private CheckBox _bgHoverCheck;
@@ -791,23 +793,89 @@ namespace RoMulti
             urlRow.Children.Add(_pingTextBox);
             dStack.Children.Add(urlRow);
 
-            var serverRow = new DockPanel { Margin = new Thickness(0, 0, 0, 6) };
+            // Private Server Code Row (prominent Add/Save + Clear + live status badge)
+            var serverPanel = new StackPanel { Margin = new Thickness(0, 0, 0, 8) };
+            var serverRow = new Grid();
+            serverRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            serverRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            serverRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            serverRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
             var serverLabel = new TextBlock
             {
-                Text = "Private server code",
+                Text = "Private Server:",
                 FontSize = 11.5,
-                Foreground = TextSecondary,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = TextPrimary,
                 VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 0, 10, 0)
+                Margin = new Thickness(0, 0, 8, 0)
             };
-            DockPanel.SetDock(serverLabel, Dock.Left);
+            Grid.SetColumn(serverLabel, 0);
             serverRow.Children.Add(serverLabel);
+
+            var serverInputHost = new Grid { Margin = new Thickness(0, 0, 6, 0) };
             _privateServerBox = CreateDarkTextBox(_config.PrivateServerCode ?? "",
-                "Optional. Enter a private server code, then click Save Config.");
+                "Optional private server code shown in Discord webhook alerts (letters, digits, hyphens, underscores).");
             _privateServerBox.MaxLength = 128;
             System.Windows.Automation.AutomationProperties.SetName(_privateServerBox, "Private server code");
-            serverRow.Children.Add(_privateServerBox);
-            dStack.Children.Add(serverRow);
+            _privateServerPlaceholder = new TextBlock
+            {
+                Text = "Add private server code (e.g. 57859146) — shown in Discord webhook",
+                FontSize = 11.5,
+                Foreground = TextSecondary,
+                Opacity = 0.65,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(9, 0, 8, 0),
+                IsHitTestVisible = false,
+                Visibility = string.IsNullOrEmpty(_privateServerBox.Text) ? Visibility.Visible : Visibility.Collapsed
+            };
+            _privateServerBox.TextChanged += (s, e) =>
+            {
+                _privateServerPlaceholder.Visibility = string.IsNullOrEmpty(_privateServerBox.Text)
+                    ? Visibility.Visible
+                    : Visibility.Collapsed;
+            };
+            _privateServerBox.KeyDown += (s, e) =>
+            {
+                if (e.Key == Key.Enter)
+                {
+                    ApplyPrivateServerCode(showLog: true);
+                    e.Handled = true;
+                }
+            };
+            _privateServerBox.LostFocus += (s, e) => ApplyPrivateServerCode(showLog: false);
+            serverInputHost.Children.Add(_privateServerBox);
+            serverInputHost.Children.Add(_privateServerPlaceholder);
+            Grid.SetColumn(serverInputHost, 1);
+            serverRow.Children.Add(serverInputHost);
+
+            var saveServerBtn = CreateCompactButton("Add / Save", AccentBlue, System.Windows.Media.Brushes.White, AccentBlue);
+            saveServerBtn.Margin = new Thickness(0, 0, 6, 0);
+            saveServerBtn.ToolTip = "Save private server code so it appears immediately in Discord webhook alerts";
+            saveServerBtn.Click += (s, e) => ApplyPrivateServerCode(showLog: true);
+            Grid.SetColumn(saveServerBtn, 2);
+            serverRow.Children.Add(saveServerBtn);
+
+            var clearServerBtn = CreateCompactButton("Clear", BgElevated, TextSecondary, BorderSubtle);
+            clearServerBtn.ToolTip = "Remove private server code from Discord webhook alerts";
+            clearServerBtn.Click += (s, e) =>
+            {
+                _privateServerBox.Text = "";
+                ApplyPrivateServerCode(showLog: true);
+            };
+            Grid.SetColumn(clearServerBtn, 3);
+            serverRow.Children.Add(clearServerBtn);
+
+            serverPanel.Children.Add(serverRow);
+
+            _privateServerStatusLabel = new TextBlock
+            {
+                FontSize = 11,
+                Margin = new Thickness(0, 3, 0, 0)
+            };
+            UpdatePrivateServerStatusLabel(isError: false);
+            serverPanel.Children.Add(_privateServerStatusLabel);
+            dStack.Children.Add(serverPanel);
 
             // Options + Save/Test buttons
             var dOptRow = new Grid();
@@ -1476,7 +1544,7 @@ namespace RoMulti
 
                 string webhookUrl = _webhookBox.Text.Trim();
                 string pingText = _pingTextBox.Text.Trim();
-                string privateServerCode = _config.PrivateServerCode;
+                string privateServerCode = GetActivePrivateServerCode();
                 bool attachImg = _attachScreenshotCheck.IsChecked == true;
                 bool alertMap = _alertMapChangeCheck.IsChecked == true;
 
@@ -1658,7 +1726,7 @@ namespace RoMulti
                 Log("INFO", string.Format("Baseline synced for {0}: {1} existing event(s) ignored.", scout.Label, baselineCount));
             else if (newMatches.Count > 0)
             {
-                string privateServerCode = _config.PrivateServerCode;
+                string privateServerCode = GetActivePrivateServerCode();
                 QueueWatcherDelivery(() => DispatchMatchedEventsAsync(
                     newMatches, scout, session, capture, webhookUrl, pingText, attachImg, privateServerCode));
             }
@@ -1903,6 +1971,65 @@ namespace RoMulti
             Log("INFO", "Test Capture on " + target.Label + ": " + cap.OcrLines.Count + " OCR line(s), " + matches.Count + " matched event(s).");
         }
 
+        private string GetActivePrivateServerCode()
+        {
+            string liveCode;
+            if (_privateServerBox != null && DiscordNotifier.TryNormalizePrivateServerCode(_privateServerBox.Text, out liveCode))
+                return liveCode;
+            return _config.PrivateServerCode ?? "";
+        }
+
+        private void ApplyPrivateServerCode(bool showLog)
+        {
+            string code;
+            if (!DiscordNotifier.TryNormalizePrivateServerCode(_privateServerBox.Text, out code))
+            {
+                _privateServerBox.BorderBrush = StatusRed;
+                UpdatePrivateServerStatusLabel(isError: true);
+                if (showLog) Log("WARN", "Private server code only allows letters, digits, hyphens (-), or underscores (_).");
+                return;
+            }
+
+            bool changed = !string.Equals(_config.PrivateServerCode ?? "", code, StringComparison.Ordinal);
+            _privateServerBox.Text = code;
+            _privateServerBox.BorderBrush = BorderSubtle;
+            _config.PrivateServerCode = code;
+            UpdatePrivateServerStatusLabel(isError: false);
+
+            if (changed || showLog)
+            {
+                SaveWatcherConfig(silent: true);
+                if (showLog)
+                {
+                    Log("OK", string.IsNullOrEmpty(code)
+                        ? "Private server code cleared (hidden from next Discord webhooks)."
+                        : "Private server code saved: " + code + " (will show in next Discord webhooks).");
+                }
+            }
+        }
+
+        private void UpdatePrivateServerStatusLabel(bool isError)
+        {
+            if (_privateServerStatusLabel == null) return;
+            if (isError)
+            {
+                _privateServerStatusLabel.Text = "Invalid code: use only letters, digits, hyphens (-), or underscores (_).";
+                _privateServerStatusLabel.Foreground = StatusRed;
+                return;
+            }
+            string active = _config.PrivateServerCode ?? "";
+            if (string.IsNullOrEmpty(active))
+            {
+                _privateServerStatusLabel.Text = "Webhook Private server field: not set (optional).";
+                _privateServerStatusLabel.Foreground = TextSecondary;
+            }
+            else
+            {
+                _privateServerStatusLabel.Text = "Active in Discord webhook -> Private server: " + active;
+                _privateServerStatusLabel.Foreground = StatusGreen;
+            }
+        }
+
         private void SaveWatcherConfig(bool silent)
         {
             string privateServerCode;
@@ -1910,10 +2037,12 @@ namespace RoMulti
             {
                 _config.PrivateServerCode = privateServerCode;
                 _privateServerBox.BorderBrush = BorderSubtle;
+                UpdatePrivateServerStatusLabel(isError: false);
             }
             else
             {
                 _privateServerBox.BorderBrush = StatusRed;
+                UpdatePrivateServerStatusLabel(isError: true);
                 if (!silent) Log("WARN", "Private server code needs letters, digits, hyphens or underscores. Previous code kept.");
             }
             _config.WebhookUrl = _webhookBox.Text.Trim();
