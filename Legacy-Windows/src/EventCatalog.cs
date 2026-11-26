@@ -187,7 +187,7 @@ namespace RoMulti
             @"\b(?:[o0][f1t]{2}|oh)\b",
             RegexOptions.Compiled);
         private static readonly Regex StarPrefixRegex = new Regex(
-            @"^(?:(?:[ectfk][vw][ec](?:nt|ni|nf|nl|n7|m|rn|nto|nt0)|event[o0]?|even[i1f]|the|a)\s+)+",
+            @"^(?:(?:[ectfklt]{1,2}[vw][ec](?:nt|ni|nf|nl|n7|m|rn|nto|nt0)[o0l]?|event[o0l]?|even[i1f][o0l]?)\s*|(?:the|a)\s+)+",
             RegexOptions.Compiled);
         private static readonly Regex StarCountPairRegex = new Regex(
             @"\b([a-z0-9]{1,7})\s+st[a4][rl1][s5]?\b",
@@ -198,15 +198,129 @@ namespace RoMulti
         private static readonly Regex StarUiRejectRegex = new Regex(
             @"\b(?:inventory|remaining|left|needed|collected|total|out of)\b",
             RegexOptions.Compiled);
-        private static readonly EventRule[] StarRules = Enumerable.Range(1, StarCounts.Length).Select(count => new EventRule
+        private static readonly EventRule[] StarRules = new[]
         {
-            Id = "star_" + count,
-            DisplayName = count + (count == 1 ? " Star (Dragon Ball)" : " Stars (Dragon Ball)"),
-            Category = "Stars",
-            Hint = "One/Two/Three/Four/Five/Six/Seven Star(s) broadcast",
-            EmbedColor = 0xEAB308,
-            DefaultLevel = EventAlertLevel.Normal
-        }).ToArray();
+            new EventRule
+            {
+                Id = "star_1",
+                DisplayName = "1 Star (Dragon Ball)",
+                Category = "Stars",
+                Hint = "A single star shines, igniting the spark of an epic saga...",
+                EmbedColor = 0xEAB308,
+                DefaultLevel = EventAlertLevel.Normal,
+                TokenGroups = new[]
+                {
+                    new[] { "single", "star" },
+                    new[] { "igniting", "spark" },
+                    new[] { "epic", "saga" },
+                    new[] { "strength", "courage" },
+                    new[] { "courage", "dance" }
+                }
+            },
+            new EventRule
+            {
+                Id = "star_2",
+                DisplayName = "2 Stars (Dragon Ball)",
+                Category = "Stars",
+                Hint = "Two stars align, forging alliances in the face of looming shadows...",
+                EmbedColor = 0xEAB308,
+                DefaultLevel = EventAlertLevel.Normal,
+                TokenGroups = new[]
+                {
+                    new[] { "stars", "align" },
+                    new[] { "forging", "alliances" },
+                    new[] { "looming", "shadows" },
+                    new[] { "bond", "stronger", "fate" },
+                    new[] { "stronger", "than", "fate" }
+                }
+            },
+            new EventRule
+            {
+                Id = "star_3",
+                DisplayName = "3 Stars (Dragon Ball)",
+                Category = "Stars",
+                Hint = "Three stars blaze, a beacon of trials overcome, where friends gather...",
+                EmbedColor = 0xEAB308,
+                DefaultLevel = EventAlertLevel.Normal,
+                TokenGroups = new[]
+                {
+                    new[] { "stars", "blaze" },
+                    new[] { "beacon", "trials" },
+                    new[] { "trials", "overcome" },
+                    new[] { "friends", "gather" },
+                    new[] { "powers", "awaken" }
+                }
+            },
+            new EventRule
+            {
+                Id = "star_4",
+                DisplayName = "4 Stars (Dragon Ball)",
+                Category = "Stars",
+                Hint = "Four stars glow, marking the corners of a journey fraught with adversaries...",
+                EmbedColor = 0xEAB308,
+                DefaultLevel = EventAlertLevel.Normal,
+                TokenGroups = new[]
+                {
+                    new[] { "marking", "corners" },
+                    new[] { "corners", "journey" },
+                    new[] { "fraught", "adversaries" },
+                    new[] { "bound", "light", "hope" }
+                }
+            },
+            new EventRule
+            {
+                Id = "star_5",
+                DisplayName = "5 Stars (Dragon Ball)",
+                Category = "Stars",
+                Hint = "Five stars radiate, a testament to battles fought, wisdom gained...",
+                EmbedColor = 0xEAB308,
+                DefaultLevel = EventAlertLevel.Normal,
+                TokenGroups = new[]
+                {
+                    new[] { "stars", "radiate" },
+                    new[] { "testament", "battles" },
+                    new[] { "battles", "fought" },
+                    new[] { "wisdom", "gained" },
+                    new[] { "spirits", "unbroken" }
+                }
+            },
+            new EventRule
+            {
+                Id = "star_6",
+                DisplayName = "6 Stars (Dragon Ball)",
+                Category = "Stars",
+                Hint = "Six stars shimmer, near completion, a prelude to the ultimate challenge...",
+                EmbedColor = 0xEAB308,
+                DefaultLevel = EventAlertLevel.Normal,
+                TokenGroups = new[]
+                {
+                    new[] { "stars", "shimmer" },
+                    new[] { "near", "completion" },
+                    new[] { "prelude", "ultimate" },
+                    new[] { "ultimate", "challenge" },
+                    new[] { "heartbeats", "heroes" }
+                }
+            },
+            new EventRule
+            {
+                Id = "star_7",
+                DisplayName = "7 Stars (Dragon Ball)",
+                Category = "Stars",
+                Hint = "As seven stars converge, the heavens themselves pause to mourn and honor a legacy...",
+                EmbedColor = 0xEAB308,
+                DefaultLevel = EventAlertLevel.Normal,
+                TokenGroups = new[]
+                {
+                    new[] { "stars", "converge" },
+                    new[] { "heavens", "pause" },
+                    new[] { "mourn", "honor", "legacy" },
+                    new[] { "honor", "legacy" },
+                    new[] { "universe", "whispers", "thanks" },
+                    new[] { "final", "wish", "awaits" },
+                    new[] { "tribute", "master", "dreams" }
+                }
+            }
+        };
 
         public static readonly List<EventRule> Rules = new List<EventRule>
         {
@@ -747,7 +861,7 @@ namespace RoMulti
             "retreat", "depart", "banish", "cease", "collaps", "dissolv",
             "reced", "sinks back", "returns to the", "returned to", "left the",
             "has ended", "event ended", "has closed", "portal closed", "rift closed", "closes",
-            "no longer", "calm returns", "peace returns", "overcome", "extinguished", "has fled", "was fled", "fled the", "expired",
+            "no longer", "calm returns", "peace returns", "has been overcome", "was overcome", "extinguished", "has fled", "was fled", "fled the", "expired",
             "in the clasp", "clasp of", "determined soul", "finds its purpose", "star finds",
             "merging with a spirit", "spirit aflame", "aflame with purpose", "claimed the star", "star has been claimed"
         };

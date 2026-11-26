@@ -1098,12 +1098,29 @@ namespace RoMulti
                     Replay(poetic, config, start, 0, "", tip) &&
                     Replay(poetic, config, start, 3, id, "[Event] " + names[i] + verbs[i]);
             }
-            // Real screenshot Two Stars (100%, 75% (Cvcnt) + atizn, 65% + atitn), glued & mid-sentence, plus safety guards
+            // All 7 exact in-game Dragon Ball Star broadcasts + degraded count-corrupted lore fallback + safety guards
             var twoStarCases = new[]
             {
+                Tuple.Create("star_1", new[] { "[Event] A single star shines, igniting the spark of an epic saga, where strength", "and courage begin their dance." }),
                 Tuple.Create("star_2", new[] { "[Event] Two stars align, forging alliances in the face of", "looming shadows, a bond stronger than fate." }),
+                Tuple.Create("star_3", new[] { "[Event] Three stars blaze, a beacon of trials overcome, where friends gather and", "powers awaken." }),
+                Tuple.Create("star_4", new[] { "[Event] Four stars glow, marking the corners of a journey fraught with", "adversaries, yet bound by the light of hope." }),
+                Tuple.Create("star_5", new[] { "[Event] Five stars radiate, a testament to battles fought, wisdom gained, and", "spirits unbroken." }),
+                Tuple.Create("star_6", new[] { "[Event] Six stars shimmer, near completion, a prelude to the ultimate challenge,", "echoing the heartbeats of heroes." }),
+                Tuple.Create("star_7", new[] { "[Event] As seven stars converge, the heavens themselves pause to mourn and honor a", "legacy; in this moment, the universe whispers thanks to its visionary, and a final wish", "awaits, a tribute to the master of dreams." }),
+                // Lore fallback when OCR completely destroys the star count words
+                Tuple.Create("star_1", new[] { "[Event] A sngl stx igniting the spark of an epic saga." }),
+                Tuple.Create("star_2", new[] { "[Event] Twx stx forging alliances in the face of looming shadows." }),
+                Tuple.Create("star_3", new[] { "[Event] Thrx stx, a beacon of trials overcome, where friends gather." }),
+                Tuple.Create("star_4", new[] { "[Event] Fxr stx marking the corners of a journey fraught with adversaries." }),
+                Tuple.Create("star_5", new[] { "[Event] Fvx stx, a testament to battles fought, wisdom gained." }),
+                Tuple.Create("star_6", new[] { "[Event] Sxx stx near completion, echoing the heartbeats of heroes." }),
+                Tuple.Create("star_7", new[] { "[Event] As svx stx, the heavens themselves pause to mourn and honor a legacy." }),
                 Tuple.Create("star_2", new[] { "(Cvcnt) Two stars atizn, forging attianccs in thc face of", "looming shadows, a bond stronger than fate." }),
                 Tuple.Create("star_2", new[] { "(Cvent) two stars atitn, atban«s in the of", "shadows, a bond stronger than fate." }),
+                Tuple.Create("star_3", new[] { "Cventl three stars blaze. a bexon of triats overcome. where friends cat her and" }),
+                Tuple.Create("star_4", new[] { "ttventl four stars ctow, markin the corners 01 a journey fraught with" }),
+                Tuple.Create("star_5", new[] { "(Eventlfive stars radiate, a testament to batttes fought. wisdom gained, and" }),
                 Tuple.Create("star_2", new[] { "Two stars align, forging alliances in the face of looming shadows." }),
                 Tuple.Create("star_2", new[] { "[Event] Behold, twostars awaken in the distance!" }),
                 Tuple.Create("star_1", new[] { "[Event] A lone star rises above the kingdom." }),
@@ -1452,7 +1469,7 @@ namespace RoMulti
                 DiscordNotifier.ComputeRetryDelayMs(1, TimeSpan.FromSeconds(1.8)) != 1800 ||
                 DiscordNotifier.ComputeRetryDelayMs(1, TimeSpan.FromSeconds(30)) != 5000 ||
                 DiscordNotifier.ComputeRetryDelayMs(1, TimeSpan.FromDays(40000)) != 5000 ||
-                MainWindow.AppVersion != "v1.4.4")
+                MainWindow.AppVersion != "v1.5.0")
             {
                 Console.WriteLine("FAIL T3-4b: DiscordNotifier retry delay clamping or MainWindow.AppVersion mismatch.");
                 return false;

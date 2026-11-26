@@ -21,7 +21,7 @@ final class EventMatcher {
     private static final Pattern PLAYER = Pattern.compile("^\\s*(?:\\[[^]]+\\]\\s*)?[\\w]{2,24}:\\s+\\S");
     private static final Pattern NON_WORD = Pattern.compile("[^a-z0-9]+");
     private static final Pattern STAR_PREFIX = Pattern.compile(
-        "^(?:(?:[ectfk][vw][ec](?:nt|ni|nf|nl|n7|m|rn|nto|nt0)|event[o0]?|even[i1f]|the|a) )+");
+        "^(?:(?:[ectfklt]{1,2}[vw][ec](?:nt|ni|nf|nl|n7|m|rn|nto|nt0)[o0l]?|event[o0l]?|even[i1f][o0l]?)\\s*|(?:the|a) )+");
     private static final Pattern STAR_COUNT = Pattern.compile("\\b([a-z0-9]{1,7})\\s+st[a4][rl1][s5]?\\b");
     private static final Pattern STAR_GLUED = Pattern.compile(
         "\\b(one|two|three|four|five|six|seven|single|lone|[1-7])st[a4][rl1][s5]?\\b");
@@ -134,7 +134,7 @@ final class EventMatcher {
         String compact = intentSkeleton(line).replace(" ", "");
 
         // Tier 1: Exact token-group match
-        for (Rule rule : CloverRules.NAMED) {
+        for (Rule rule : CloverRules.ALL_NAMED) {
             if (!tagged && !allowsTaglessRule(rule, line, words, compact)) continue;
             if (rule.matches(line)) return rule;
         }
@@ -143,7 +143,7 @@ final class EventMatcher {
         // Tier 2: Unique single-word typo match (ambiguity short-circuits to null!)
         Rule tier2Candidate = null;
         int tier2Count = 0;
-        for (Rule rule : CloverRules.NAMED) {
+        for (Rule rule : CloverRules.ALL_NAMED) {
             if (!tagged && !allowsTaglessRule(rule, line, words, compact)) continue;
             if (!rule.matchesTypo(words)) continue;
             tier2Candidate = rule;
@@ -154,7 +154,7 @@ final class EventMatcher {
         // Tier 3.1: Space-glued distinctive multi-word anchor match (ambiguity short-circuits to null!)
         Rule gluedCandidate = null;
         int gluedCount = 0;
-        for (Rule rule : CloverRules.NAMED) {
+        for (Rule rule : CloverRules.ALL_NAMED) {
             if (!tagged && !allowsTaglessRule(rule, line, words, compact)) continue;
             if (!rule.matchesGlued(compact)) continue;
             gluedCandidate = rule;
@@ -165,7 +165,7 @@ final class EventMatcher {
         // Tier 3.2: Multi-typo token-group intent match (strict uniqueness -> null if 2+ rules qualify)
         Rule intentCandidate = null;
         int intentCount = 0;
-        for (Rule rule : CloverRules.NAMED) {
+        for (Rule rule : CloverRules.ALL_NAMED) {
             if (!tagged && !allowsTaglessRule(rule, line, words, compact)) continue;
             if (!rule.matchesIntentMultiTypo(words)) continue;
             intentCandidate = rule;

@@ -126,6 +126,33 @@ final class EventReplay {
             expect(poetic, 0, "", TIP);
             expect(poetic, 3, id, "[Event] " + names[i] + verbs[i]);
         }
+        // All 7 exact in-game Dragon Ball Star broadcasts + count-corrupted lore fallbacks + 3-Star overcome immunity
+        String[][] exactStars = {
+            { "star_1", "[Event] A single star shines, igniting the spark of an epic saga, where strength and courage begin their dance." },
+            { "star_2", "[Event] Two stars align, forging alliances in the face of looming shadows, a bond stronger than fate." },
+            { "star_3", "[Event] Three stars blaze, a beacon of trials overcome, where friends gather and powers awaken." },
+            { "star_4", "[Event] Four stars glow, marking the corners of a journey fraught with adversaries, yet bound by the light of hope." },
+            { "star_5", "[Event] Five stars radiate, a testament to battles fought, wisdom gained, and spirits unbroken." },
+            { "star_6", "[Event] Six stars shimmer, near completion, a prelude to the ultimate challenge, echoing the heartbeats of heroes." },
+            { "star_7", "[Event] As seven stars converge, the heavens themselves pause to mourn and honor a legacy; in this moment, the universe whispers thanks to its visionary, and a final wish awaits, a tribute to the master of dreams." },
+            { "star_1", "[Event] A sngl stx igniting the spark of an epic saga." },
+            { "star_2", "[Event] Twx stx forging alliances in the face of looming shadows." },
+            { "star_3", "[Event] Thrx stx, a beacon of trials overcome, where friends gather." },
+            { "star_4", "[Event] Fxr stx marking the corners of a journey fraught with adversaries." },
+            { "star_5", "[Event] Fvx stx, a testament to battles fought, wisdom gained." },
+            { "star_6", "[Event] Sxx stx near completion, echoing the heartbeats of heroes." },
+            { "star_7", "[Event] As svx stx, the heavens themselves pause to mourn and honor a legacy." },
+            { "star_3", "Cventl three stars blaze. a bexon of triats overcome. where friends cat her and" },
+            { "star_4", "ttventl four stars ctow, markin the corners 01 a journey fraught with" },
+            { "star_5", "(Eventlfive stars radiate, a testament to batttes fought. wisdom gained, and" }
+        };
+        for (String[] es : exactStars) {
+            List<EventMatcher.Detection> det = EventMatcher.scan(Arrays.asList(es[1]), false).events;
+            if (det.size() != 1 || !det.get(0).rule.id.equals(es[0])) {
+                throw new AssertionError("Exact/lore Dragon Ball Star failed: expected " + es[0] + ", got "
+                    + (det.isEmpty() ? "none" : det.get(0).rule.id) + " for: " + es[1]);
+            }
+        }
         // Real Two Stars screenshot (100%, 75% (Cvcnt) + atizn, tag-less, glued, mid-sentence) + safety guards
         EventHistory twoStars = new EventHistory();
         expect(twoStars, 0, "", TIP);

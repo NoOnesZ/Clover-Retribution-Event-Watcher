@@ -34,18 +34,22 @@ final class CloverRules {
     }
 
     static final String[] STAR_COUNTS = {"one", "two", "three", "four", "five", "six", "seven"};
-    static final EventMatcher.Rule[] STAR_EVENTS = createStarEvents();
-
-    private static EventMatcher.Rule[] createStarEvents() {
-        EventMatcher.Rule[] rules = new EventMatcher.Rule[STAR_COUNTS.length];
-        for (int i = 0; i < rules.length; i++) {
-            int count = i + 1;
-            rules[i] = new EventMatcher.Rule("star_" + count,
-                count + (count == 1 ? " Star (Dragon Ball)" : " Stars (Dragon Ball)"),
-                0xEAB308, true, false, "");
-        }
-        return rules;
-    }
+    static final EventMatcher.Rule[] STAR_EVENTS = {
+        new EventMatcher.Rule("star_1", "1 Star (Dragon Ball)", 0xEAB308, true, false,
+            "single star|igniting spark|epic saga|strength courage|courage dance"),
+        new EventMatcher.Rule("star_2", "2 Stars (Dragon Ball)", 0xEAB308, true, false,
+            "stars align|forging alliances|looming shadows|bond stronger fate|stronger than fate"),
+        new EventMatcher.Rule("star_3", "3 Stars (Dragon Ball)", 0xEAB308, true, false,
+            "stars blaze|beacon trials|trials overcome|friends gather|powers awaken"),
+        new EventMatcher.Rule("star_4", "4 Stars (Dragon Ball)", 0xEAB308, true, false,
+            "marking corners|corners journey|fraught adversaries|bound light hope"),
+        new EventMatcher.Rule("star_5", "5 Stars (Dragon Ball)", 0xEAB308, true, false,
+            "stars radiate|testament battles|battles fought|wisdom gained|spirits unbroken"),
+        new EventMatcher.Rule("star_6", "6 Stars (Dragon Ball)", 0xEAB308, true, false,
+            "stars shimmer|near completion|prelude ultimate|ultimate challenge|heartbeats heroes"),
+        new EventMatcher.Rule("star_7", "7 Stars (Dragon Ball)", 0xEAB308, true, false,
+            "stars converge|heavens pause|mourn honor legacy|honor legacy|universe whispers thanks|final wish awaits|tribute master dreams")
+    };
 
     static final EventMatcher.Rule[] NAMED = {
         new EventMatcher.Rule("devil_rift", "Devil Rift", 0x9333EA, true, true,
@@ -98,6 +102,15 @@ final class CloverRules {
     static final EventMatcher.Rule UNKNOWN = new EventMatcher.Rule(
         "unknown_event", "Other [Event] Broadcast", 0x3B82F6, true, false, "");
 
+    static final EventMatcher.Rule[] ALL_NAMED = concatRules(NAMED, STAR_EVENTS);
+
+    private static EventMatcher.Rule[] concatRules(EventMatcher.Rule[] first, EventMatcher.Rule[] second) {
+        EventMatcher.Rule[] merged = new EventMatcher.Rule[first.length + second.length];
+        System.arraycopy(first, 0, merged, 0, first.length);
+        System.arraycopy(second, 0, merged, first.length, second.length);
+        return merged;
+    }
+
     static final String[] DESPAWN = {
         "vanish", "eanish", "vanished", "despawn", "disappear", "dissipat", "subsid",
         "fade", "fading", "defeat", "defeated", "slain", "was killed", "has died",
@@ -109,7 +122,7 @@ final class CloverRules {
         "mysteriously", "retreat", "depart", "banish", "cease", "collaps",
         "dissolv", "reced", "sinks back", "returns to the", "returned to", "left the",
         "has ended", "event ended", "has closed", "portal closed", "rift closed", "closes",
-        "no longer", "calm returns", "peace returns", "overcome", "extinguished", "has fled", "was fled", "fled the", "expired",
+        "no longer", "calm returns", "peace returns", "has been overcome", "was overcome", "extinguished", "has fled", "was fled", "fled the", "expired",
         "in the clasp", "clasp of", "determined soul", "finds its purpose", "star finds",
         "merging with a spirit", "spirit aflame", "aflame with purpose", "claimed the star", "star has been claimed"
     };
